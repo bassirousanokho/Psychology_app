@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  ci:
+    name: Type-check, lint & build
+    runs-on: ubuntu-latest
+
+    env:
+      # Dummy values — all pages are dynamically rendered (auth()), so
+      # next build never connects to the DB or calls Clerk at build time.
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/psy_app
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsucHJveHkuZGV2
+      CLERK_SECRET_KEY: sk_test_placeholder000000000000000000000000
+      CLERK_WEBHOOK_SECRET: whsec_placeholder
+      NEXT_PUBLIC_CLERK_SIGN_IN_URL: /sign-in
+      NEXT_PUBLIC_CLERK_SIGN_UP_URL: /sign-up
+      NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL: /dashboard
+      NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL: /dashboard
+      # 64 hex chars = valid AES-256 key format (all-zero is safe for CI)
+      ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      CRON_SECRET: ci_cron_secret
+      UPLOADTHING_TOKEN: placeholder
+      RESEND_API_KEY: re_placeholder
+      RESEND_FROM_EMAIL: noreply@example.com
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build

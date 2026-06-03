@@ -1,0 +1,281 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  PRACTITIONER
+  SECRETARY
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  OVERDUE
+}
+
+// ---------------------------------------------------------------------------
+// Workspace (Tenant)
+// ---------------------------------------------------------------------------
+
+model Workspace {
+  id   String @id // Clerk org ID: org_xxxxx
+  name String
+  slug String @unique
+
+  // Billing defaults – practitioners can override per appointment
+  defaultTariff Decimal @default(0) @db.Decimal(10, 2)
+  taxRate       Decimal @default(0) @db.Decimal(5, 2)
+  currency      String  @default("EUR")
+
+  // Availability settings
+  workingDays       Int[]  // 1=Mon … 7=Sun (ISO weekday)
+  workingHoursStart String @default("09:00") // "HH:mm"
+  workingHoursEnd   String @default("18:00") // "HH:mm"
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members        WorkspaceMember[]
+  patients       Patient[]
+  appointments   Appointment[]
+  invoices       Invoice[]
+  documents      Document[]
+  patientUsers   PatientUser[]
+  patientInvites PatientInvite[]
+}
+
+// ---------------------------------------------------------------------------
+// User & Workspace membership
+// ---------------------------------------------------------------------------
+
+model User {
+  id    String @id // Clerk user ID: user_xxxxx
+  email String @unique
+  name  String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspaces         WorkspaceMember[]
+  appointments       Appointment[] @relation("PractitionerAppointments")
+  uploadedDocuments  Document[]    @relation("UploadedDocuments")
+}
+
+// Join table that stores the role of a User within a specific Workspace.
+// A user could theoretically be a practitioner in one clinic and a secretary
+// in another – this model handles that cleanly.
+model WorkspaceMember {
+  id          String   @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        UserRole @default(PRACTITIONER)
+  joinedAt    DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([workspaceId])
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Patient
+// ---------------------------------------------------------------------------
+
+model Patient {
+  id          String    @id @default(cuid())
+  workspaceId String
+  firstName   String
+  lastName    String
+  email       String?
+  phone       String?
+  dateOfBirth DateTime?
+
+  // General (non-session) notes visible to practitioners
+  backgroundNotes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace    Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+  invoices     Invoice[]
+  documents    Document[]
+  portalUser   PatientUser?
+  invites      PatientInvite[]
+
+  @@index([workspaceId])
+  @@index([workspaceId, lastName])
+}
+
+// ---------------------------------------------------------------------------
+// Appointment
+// ---------------------------------------------------------------------------
+
+model Appointment {
+  id             String            @id @default(cuid())
+  workspaceId    String
+  patientId      String
+  practitionerId String
+  startTime      DateTime
+  endTime        DateTime
+  status         AppointmentStatus @default(SCHEDULED)
+
+  // Session note written after the appointment (practitioners only)
+  sessionNotes    String?
+  noteCompletedAt DateTime?
+
+  // Tariff snapshot at time of booking (may differ from workspace default)
+  tariffAmount Decimal @db.Decimal(10, 2)
+  taxRate      Decimal @db.Decimal(5, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace    Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  patient      Patient    @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  practitioner User       @relation("PractitionerAppointments", fields: [practitionerId], references: [id])
+  invoice      Invoice?
+  documents    Document[]
+
+  @@index([workspaceId])
+  @@index([workspaceId, startTime])
+  @@index([patientId])
+  @@index([practitionerId])
+}
+
+// ---------------------------------------------------------------------------
+// Document
+// ---------------------------------------------------------------------------
+
+model Document {
+  id            String  @id @default(cuid())
+  workspaceId   String
+  patientId     String
+  appointmentId String?
+  uploadedById  String
+
+  name     String
+  url      String
+  fileKey  String  // UploadThing key (used for deletion)
+  fileType String  // MIME type
+  fileSize Int     // bytes
+
+  sharedWithPatient Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  patient     Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  appointment Appointment? @relation(fields: [appointmentId], references: [id])
+  uploadedBy  User         @relation("UploadedDocuments", fields: [uploadedById], references: [id])
+
+  @@index([workspaceId])
+  @@index([patientId])
+  @@index([appointmentId])
+}
+
+// ---------------------------------------------------------------------------
+// Patient portal
+// ---------------------------------------------------------------------------
+
+model PatientUser {
+  id          String   @id @default(cuid())
+  clerkUserId String   @unique
+  patientId   String   @unique
+  workspaceId String
+  createdAt   DateTime @default(now())
+
+  patient   Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+model PatientInvite {
+  id          String    @id @default(cuid())
+  workspaceId String
+  patientId   String
+  token       String    @unique @default(uuid())
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  patient   Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+// ---------------------------------------------------------------------------
+// AuditLog
+// ---------------------------------------------------------------------------
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  workspaceId  String
+  userId       String   // Clerk user ID
+  action       String   // e.g. "VIEW_PATIENT_NOTES", "EDIT_SESSION_NOTES"
+  resourceType String   // "Patient" | "Appointment" | "Document"
+  resourceId   String
+  metadata     Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([workspaceId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Invoice
+// ---------------------------------------------------------------------------
+
+model Invoice {
+  id            String        @id @default(cuid())
+  workspaceId   String
+  patientId     String
+  appointmentId String?       @unique // one-to-one with Appointment
+
+  invoiceNumber String  @unique
+  amount        Decimal @db.Decimal(10, 2)
+  taxAmount     Decimal @db.Decimal(10, 2)
+  taxRate       Decimal @db.Decimal(5, 2)
+  totalAmount   Decimal @db.Decimal(10, 2)
+  notes         String?
+  publicToken   String  @unique @default(uuid())
+
+  status  InvoiceStatus @default(DRAFT)
+  dueDate DateTime
+
+  paidAt          DateTime?
+  reminderSentAt  DateTime? // last dunning reminder timestamp
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  patient     Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  appointment Appointment? @relation(fields: [appointmentId], references: [id])
+
+  @@index([workspaceId])
+  @@index([workspaceId, status])
+  @@index([patientId])
+}

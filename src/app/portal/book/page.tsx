@@ -13,7 +13,7 @@ export default async function BookPage() {
 
   function isoDay(d: Date) { return d.getDay() === 0 ? 7 : d.getDay(); }
 
-  let cursor = new Date();
+  const cursor = new Date();
   cursor.setDate(cursor.getDate() + 1);
   cursor.setHours(0, 0, 0, 0);
   let count = 0;

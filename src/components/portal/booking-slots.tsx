@@ -39,7 +39,7 @@ export function BookingSlots({
 
   // Next 14 days that are working days
   const availableDates: Date[] = [];
-  let cursor = new Date();
+  const cursor = new Date();
   // Start from tomorrow so patients can't book same-day
   cursor.setDate(cursor.getDate() + 1);
   cursor.setHours(0, 0, 0, 0);

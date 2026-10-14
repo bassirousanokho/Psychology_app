@@ -4,8 +4,7 @@ import { useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Upload, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { uploadFiles } from "@/lib/uploadthing";
-import { saveDocument } from "@/app/(dashboard)/dashboard/patients/[id]/actions";
+import { createUploadUrl, confirmDocumentUpload } from "@/app/(dashboard)/dashboard/patients/[id]/actions";
 
 interface DocumentUploaderProps {
   patientId: string;
@@ -34,30 +33,53 @@ export function DocumentUploader({ patientId, appointmentId }: DocumentUploaderP
 
     setUploading(true);
     try {
-      const uploaded = await uploadFiles("documentUploader", { files: fileArray });
-      setUploading(false);
+      const uploaded: typeof fileArray = [];
+      for (const file of fileArray) {
+        const urlResult = await createUploadUrl({
+          patientId,
+          fileName: file.name,
+          fileType: file.type,
+          fileSize: file.size,
+        });
+        if (!urlResult.success || !urlResult.uploadUrl || !urlResult.key) {
+          toast.error(urlResult.error ?? `Failed to prepare upload for ${file.name}`);
+          continue;
+        }
 
-      startTransition(async () => {
-        for (const file of uploaded) {
-          const result = await saveDocument({
+        const putRes = await fetch(urlResult.uploadUrl, {
+          method: "PUT",
+          headers: { "Content-Type": file.type },
+          body: file,
+        });
+        if (!putRes.ok) {
+          toast.error(`Failed to upload ${file.name}`);
+          continue;
+        }
+
+        uploaded.push(file);
+        startTransition(async () => {
+          const result = await confirmDocumentUpload({
             patientId,
             appointmentId,
+            key: urlResult.key!,
             name: file.name,
-            url: file.ufsUrl ?? file.url,
-            fileKey: file.key,
             fileType: file.type,
             fileSize: file.size,
           });
           if (!result.success) {
             toast.error(`Failed to save ${file.name}`);
           }
-        }
+        });
+      }
+      setUploading(false);
+
+      if (uploaded.length > 0) {
         toast.success(
           uploaded.length === 1
             ? "Document uploaded"
             : `${uploaded.length} documents uploaded`,
         );
-      });
+      }
     } catch (err) {
       setUploading(false);
       console.error("[DocumentUploader]", err);

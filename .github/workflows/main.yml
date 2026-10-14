@@ -26,7 +26,7 @@ jobs:
       ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
       NEXT_PUBLIC_APP_URL: http://localhost:3000
       CRON_SECRET: ci_cron_secret
-      UPLOADTHING_TOKEN: placeholder
+      GCS_BUCKET_NAME: ci-placeholder-bucket
       RESEND_API_KEY: re_placeholder
       RESEND_FROM_EMAIL: noreply@example.com
 

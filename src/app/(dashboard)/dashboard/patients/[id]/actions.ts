@@ -1,28 +1,56 @@
 "use server";
 
+import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import prisma from "@/lib/prisma";
 import { requireAuth } from "@/lib/tenant";
 import { audit } from "@/lib/tenant";
-import { UTApi } from "uploadthing/server";
+import { getUploadUrl, deleteFile } from "@/lib/gcs";
 import { sendPortalInvite } from "@/lib/email";
 
-const utapi = new UTApi();
+const MAX_PDF_BYTES = 16 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
-// ── Save document record after UploadThing upload completes ───────────────────
+// ── Request a signed URL to upload a document straight to GCS ─────────────────
 
-export async function saveDocument(input: {
+export async function createUploadUrl(input: {
+  patientId: string;
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+}) {
+  const { orgId } = await requireAuth();
+
+  const patient = await prisma.patient.findFirst({
+    where: { id: input.patientId, workspaceId: orgId },
+    select: { id: true },
+  });
+  if (!patient) return { success: false, error: "Patient not found" };
+
+  const isPdf = input.fileType === "application/pdf";
+  const isImage = input.fileType.startsWith("image/");
+  if (!isPdf && !isImage) return { success: false, error: "Unsupported file type" };
+  if (isPdf && input.fileSize > MAX_PDF_BYTES) return { success: false, error: "PDF exceeds 16 MB limit" };
+  if (isImage && input.fileSize > MAX_IMAGE_BYTES) return { success: false, error: "Image exceeds 8 MB limit" };
+
+  const key = `documents/${orgId}/${input.patientId}/${randomUUID()}-${input.fileName}`;
+  const uploadUrl = await getUploadUrl(key, input.fileType);
+
+  return { success: true, uploadUrl, key };
+}
+
+// ── Save document record after the client finishes uploading to GCS ───────────
+
+export async function confirmDocumentUpload(input: {
   patientId: string;
   appointmentId?: string;
+  key: string;
   name: string;
-  url: string;
-  fileKey: string;
   fileType: string;
   fileSize: number;
 }) {
   const { orgId, userId } = await requireAuth();
 
-  // Verify patient belongs to this workspace
   const patient = await prisma.patient.findFirst({
     where: { id: input.patientId, workspaceId: orgId },
     select: { id: true },
@@ -36,8 +64,7 @@ export async function saveDocument(input: {
       appointmentId: input.appointmentId ?? null,
       uploadedById: userId,
       name: input.name,
-      url: input.url,
-      fileKey: input.fileKey,
+      fileKey: input.key,
       fileType: input.fileType,
       fileSize: input.fileSize,
     },
@@ -72,7 +99,7 @@ export async function toggleShareDocument(documentId: string, shared: boolean) {
   return { success: true };
 }
 
-// ── Delete document (from UploadThing CDN + DB) ───────────────────────────────
+// ── Delete document (from GCS + DB) ────────────────────────────────────────────
 
 export async function deleteDocument(documentId: string) {
   const { orgId, userId } = await requireAuth();
@@ -83,11 +110,11 @@ export async function deleteDocument(documentId: string) {
   });
   if (!doc) return { success: false, error: "Document not found" };
 
-  // Delete from UploadThing CDN first
+  // Delete from GCS first
   try {
-    await utapi.deleteFiles(doc.fileKey);
+    await deleteFile(doc.fileKey);
   } catch (err) {
-    console.error("[deleteDocument] CDN delete failed", err);
+    console.error("[deleteDocument] GCS delete failed", err);
   }
 
   await prisma.document.delete({ where: { id: documentId } });

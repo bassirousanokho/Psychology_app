@@ -45,3 +45,6 @@ yarn-error.log*
 next-env.d.ts
 
 /src/generated/prisma
+
+# GCP service-account keys
+*-service-account.json

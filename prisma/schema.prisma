@@ -35,7 +35,7 @@ enum InvoiceStatus {
 // ---------------------------------------------------------------------------
 
 model Workspace {
-  id   String @id // Clerk org ID: org_xxxxx
+  id   String @id // Clerk user ID: user_xxxxx (one workspace per practitioner)
   name String
   slug String @unique
 
@@ -174,8 +174,7 @@ model Document {
   uploadedById  String
 
   name     String
-  url      String
-  fileKey  String  // UploadThing key (used for deletion)
+  fileKey  String  // GCS object key (used for signed URLs + deletion)
   fileType String  // MIME type
   fileSize Int     // bytes
 

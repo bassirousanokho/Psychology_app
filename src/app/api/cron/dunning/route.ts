@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { sendInvoiceReminder } from "@/lib/email";
 
-// Vercel calls this route daily via vercel.json cron.
+// Cloud Scheduler calls this route daily (see README "Deploying to GCP").
 // Guarded by CRON_SECRET to prevent public execution.
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");

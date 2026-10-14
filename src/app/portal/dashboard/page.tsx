@@ -5,6 +5,7 @@ import { requirePatientAuth } from "@/lib/patient-auth";
 import prisma from "@/lib/prisma";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { getSignedReadUrl } from "@/lib/gcs";
 
 const STATUS_VARIANTS = {
   SCHEDULED: "secondary",
@@ -18,7 +19,7 @@ export default async function PortalDashboardPage() {
 
   const now = new Date();
 
-  const [upcoming, recentDocs] = await Promise.all([
+  const [upcoming, recentDocRows] = await Promise.all([
     prisma.appointment.findMany({
       where: {
         workspaceId: session.workspaceId,
@@ -39,6 +40,10 @@ export default async function PortalDashboardPage() {
       take: 3,
     }),
   ]);
+
+  const recentDocs = await Promise.all(
+    recentDocRows.map(async (d) => ({ ...d, url: await getSignedReadUrl(d.fileKey) })),
+  );
 
   return (
     <div className="p-6 space-y-6 max-w-3xl mx-auto">

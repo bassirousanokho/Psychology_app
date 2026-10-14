@@ -11,6 +11,7 @@ import { DocumentUploader } from "@/components/documents/document-uploader";
 import { DocumentList } from "@/components/documents/document-list";
 import { InviteButton } from "@/components/portal/invite-button";
 import { audit } from "@/lib/tenant";
+import { getSignedReadUrl } from "@/lib/gcs";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -62,15 +63,17 @@ export default async function PatientProfilePage({ params }: PageProps) {
     resourceId: id,
   });
 
-  const docs = patient.documents.map((d) => ({
-    id: d.id,
-    name: d.name,
-    url: d.url,
-    fileType: d.fileType,
-    fileSize: d.fileSize,
-    sharedWithPatient: d.sharedWithPatient,
-    createdAt: d.createdAt.toISOString(),
-  }));
+  const docs = await Promise.all(
+    patient.documents.map(async (d) => ({
+      id: d.id,
+      name: d.name,
+      url: await getSignedReadUrl(d.fileKey),
+      fileType: d.fileType,
+      fileSize: d.fileSize,
+      sharedWithPatient: d.sharedWithPatient,
+      createdAt: d.createdAt.toISOString(),
+    })),
+  );
 
   return (
     <>

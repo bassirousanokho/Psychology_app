@@ -91,15 +91,22 @@ export default async function JoinPortalPage({ params }: PageProps) {
         </p>
       </div>
 
+      {/* role: "patient" tells the Clerk webhook not to create a practitioner workspace */}
       <SignUp
         forceRedirectUrl={returnUrl}
         initialValues={{ emailAddress: invite.patient.email ?? undefined }}
+        unsafeMetadata={{ role: "patient" }}
       />
 
       <p className="text-sm text-muted-foreground">
         Already have an account?{" "}
         <span className="block mt-2">
-          <SignIn routing="hash" forceRedirectUrl={returnUrl} />
+          <SignIn
+            routing="hash"
+            forceRedirectUrl={returnUrl}
+            signUpUrl={returnUrl}
+            unsafeMetadata={{ role: "patient" }}
+          />
         </span>
       </p>
     </div>

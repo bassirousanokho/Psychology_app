@@ -1,6 +1,6 @@
 import { headers } from "next/headers";
 import { Webhook } from "svix";
-import type { WebhookEvent } from "@clerk/nextjs/server";
+import type { UserJSON, WebhookEvent } from "@clerk/nextjs/server";
 import prisma from "@/lib/prisma";
 
 export async function POST(req: Request) {
@@ -34,7 +34,11 @@ export async function POST(req: Request) {
   // ── user.created → bootstrap User + Workspace + WorkspaceMember ─────────────
   // Each user owns exactly one workspace (workspaceId = userId).
   // No Clerk organisations are required.
-  if (evt.type === "user.created") {
+  // Patients are linked to their Patient record by /portal/join — they get no
+  // workspace. Sign-up forms tag the role in unsafeMetadata; untagged accounts
+  // (created from another Clerk screen) count as patients if their email has a
+  // pending portal invite.
+  if (evt.type === "user.created" && !(await isPatientAccount(evt.data))) {
     const { id, email_addresses, first_name, last_name } = evt.data;
     const primaryEmail = email_addresses.find(
       (e) => e.id === evt.data.primary_email_address_id,
@@ -82,4 +86,21 @@ export async function POST(req: Request) {
   }
 
   return new Response("OK", { status: 200 });
+}
+
+async function isPatientAccount(user: UserJSON): Promise<boolean> {
+  const role = user.unsafe_metadata?.role;
+  if (role === "patient") return true;
+  if (role === "practitioner") return false;
+
+  const emails = user.email_addresses.map((e) => e.email_address);
+  const pendingInvite = await prisma.patientInvite.findFirst({
+    where: {
+      usedAt: null,
+      expiresAt: { gt: new Date() },
+      patient: { email: { in: emails, mode: "insensitive" } },
+    },
+    select: { id: true },
+  });
+  return pendingInvite !== null;
 }

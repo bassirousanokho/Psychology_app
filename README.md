@@ -199,6 +199,7 @@ All variables are documented in `.env.example`. Here is what each one does:
 | `RESEND_FROM_EMAIL` | No | Verified sender address in Resend |
 | `NEXT_PUBLIC_APP_URL` | Yes (prod) | Full public URL — used in invoice email links |
 | `CRON_SECRET` | Yes (prod) | Random secret to protect the dunning cron endpoint |
+| `TZ` | No | Practice time zone for server-side dates ("today", portal booking hours). Defaults to `Europe/Paris` (`src/instrumentation.ts`); Cloud Run itself runs in UTC |
 
 ---
 
@@ -464,6 +465,7 @@ RESEND_API_KEY: "re_..."
 RESEND_FROM_EMAIL: "invoices@yourdomain.com"
 NEXT_PUBLIC_APP_URL: "https://<placeholder — filled in after step 4, then redeploy>"
 CRON_SECRET: "<random secret, e.g. openssl rand -hex 32>"
+TZ: "Europe/Paris"
 ```
 
 > For anything beyond a throwaway test env, prefer `--set-secrets` with [Secret Manager](https://cloud.google.com/secret-manager) instead of a plaintext env file for `CLERK_SECRET_KEY`, `ENCRYPTION_KEY`, and `CRON_SECRET`.
@@ -508,6 +510,7 @@ Recreate the daily dunning job with Cloud Scheduler, calling the same protected 
 gcloud scheduler jobs create http psy-app-dunning \
   --location europe-west1 \
   --schedule "0 8 * * *" \
+  --time-zone "Europe/Paris" \
   --uri "https://<your-service>.run.app/api/cron/dunning" \
   --http-method GET \
   --headers "Authorization=Bearer <CRON_SECRET>"

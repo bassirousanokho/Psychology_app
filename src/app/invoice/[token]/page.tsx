@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { format } from "date-fns";
 import prisma from "@/lib/prisma";
+import { PrintButton } from "@/components/billing/print-button";
 
 interface PageProps {
   params: Promise<{ token: string }>;
@@ -134,12 +135,7 @@ export default async function PublicInvoicePage({ params }: PageProps) {
         )}
 
         <div className="mt-8 text-center">
-          <button
-            onClick={() => window.print()}
-            className="text-xs text-gray-400 underline underline-offset-2 hover:text-gray-600 print:hidden"
-          >
-            Print / Save as PDF
-          </button>
+          <PrintButton />
         </div>
       </div>
     </div>

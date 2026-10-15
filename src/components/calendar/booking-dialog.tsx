@@ -72,7 +72,13 @@ export function BookingDialog({
 
   function onSubmit(data: AppointmentFormData) {
     startTransition(async () => {
-      const result = await createAppointment(data);
+      // datetime-local values have no time zone: resolve them in the browser so the
+      // server stores the instant the practitioner actually picked
+      const result = await createAppointment({
+        ...data,
+        startTime: new Date(data.startTime).toISOString(),
+        endTime: new Date(data.endTime).toISOString(),
+      });
       if (result.success) {
         toast.success("Appointment booked");
         onOpenChange(false);

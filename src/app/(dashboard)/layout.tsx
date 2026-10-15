@@ -12,10 +12,14 @@ export default async function DashboardLayout({
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 
-  const [workspace, pendingNotes] = await Promise.all([
+  const [workspace, patientUser, pendingNotes] = await Promise.all([
     prisma.workspace.findUnique({
       where: { id: userId },
       select: { name: true },
+    }),
+    prisma.patientUser.findUnique({
+      where: { clerkUserId: userId },
+      select: { id: true },
     }),
     prisma.appointment.count({
       where: {
@@ -26,6 +30,9 @@ export default async function DashboardLayout({
       },
     }),
   ]);
+
+  // Patient accounts belong in the portal, never in the practitioner dashboard
+  if (!workspace && patientUser) redirect("/portal/dashboard");
 
   return (
     <SidebarProvider>

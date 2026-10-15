@@ -4,6 +4,7 @@ import { auth } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 import prisma from "@/lib/prisma";
 import { patientSchema, type PatientFormData } from "@/lib/schemas";
+import { normalizePhone } from "@/lib/phone";
 
 type ActionResult = { success: true } | { success: false; error: string };
 
@@ -15,22 +16,33 @@ async function getOrgId(): Promise<string> {
   return userId;
 }
 
+function toPatientData(data: PatientFormData) {
+  return {
+    firstName: data.firstName,
+    lastName: data.lastName,
+    email: data.email || null,
+    phone: data.phone?.trim() ? normalizePhone(data.phone) : null,
+    dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : null,
+    gender: data.gender || null,
+    pronouns: data.pronouns || null,
+    backgroundNotes: data.backgroundNotes || null,
+  };
+}
+
 // ── Create ───────────────────────────────────────────────────────────────────
 
 export async function createPatient(data: PatientFormData): Promise<ActionResult> {
   const parsed = patientSchema.safeParse(data);
-  if (!parsed.success) return { success: false, error: "Invalid form data" };
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message ?? "Invalid form data" };
+  }
 
   try {
     const workspaceId = await getOrgId();
     await prisma.patient.create({
       data: {
         workspaceId,
-        firstName: parsed.data.firstName,
-        lastName: parsed.data.lastName,
-        email: parsed.data.email || null,
-        phone: parsed.data.phone || null,
-        backgroundNotes: parsed.data.backgroundNotes || null,
+        ...toPatientData(parsed.data),
       },
     });
     revalidatePath("/dashboard/patients");
@@ -48,7 +60,9 @@ export async function updatePatient(
   data: PatientFormData,
 ): Promise<ActionResult> {
   const parsed = patientSchema.safeParse(data);
-  if (!parsed.success) return { success: false, error: "Invalid form data" };
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message ?? "Invalid form data" };
+  }
 
   try {
     const workspaceId = await getOrgId();
@@ -56,11 +70,7 @@ export async function updatePatient(
     const result = await prisma.patient.updateMany({
       where: { id, workspaceId },
       data: {
-        firstName: parsed.data.firstName,
-        lastName: parsed.data.lastName,
-        email: parsed.data.email || null,
-        phone: parsed.data.phone || null,
-        backgroundNotes: parsed.data.backgroundNotes || null,
+        ...toPatientData(parsed.data),
       },
     });
     if (result.count === 0) return { success: false, error: "Patient not found" };

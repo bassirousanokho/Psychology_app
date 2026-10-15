@@ -106,8 +106,10 @@ model Patient {
   firstName   String
   lastName    String
   email       String?
-  phone       String?
-  dateOfBirth DateTime?
+  phone       String?   // normalised international format, e.g. "+33 6 12 34 56 78"
+  dateOfBirth DateTime? @db.Date
+  gender      String?   // "FEMALE" | "MALE" | "OTHER"
+  pronouns    String?
 
   // General (non-session) notes visible to practitioners
   backgroundNotes String?

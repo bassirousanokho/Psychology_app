@@ -3,12 +3,14 @@ import { redirect } from "next/navigation";
 import { format } from "date-fns";
 import { Header } from "@/components/layout/header";
 import prisma from "@/lib/prisma";
+import { ensureWorkspace } from "@/lib/workspace";
 import { BillingTable, type InvoiceRow } from "@/components/billing/billing-table";
 import { StatCard } from "@/components/billing/stat-card";
 
 export default async function BillingPage() {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
+  if (!(await ensureWorkspace(userId))) redirect("/portal/dashboard");
 
   const workspace = await prisma.workspace.findUnique({
     where: { id: userId },

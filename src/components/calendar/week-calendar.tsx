@@ -15,7 +15,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { BookingDialog } from "./booking-dialog";
+import { BookingDialog, type Availability } from "./booking-dialog";
 import type { PatientOption } from "./patient-combobox";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -105,12 +105,14 @@ function AppointmentBlock({ appt }: { appt: CalendarAppointment }) {
 interface WeekCalendarProps {
   appointments: CalendarAppointment[];
   patients: PatientOption[];
+  availability: Availability;
   currentWeekISO: string; // yyyy-MM-dd of the Monday
 }
 
 export function WeekCalendar({
   appointments,
   patients,
+  availability,
   currentWeekISO,
 }: WeekCalendarProps) {
   const router = useRouter();
@@ -118,7 +120,7 @@ export function WeekCalendar({
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
   const [bookingOpen, setBookingOpen] = useState(false);
-  const [bookingSlot, setBookingSlot] = useState<{ start: Date; end: Date } | undefined>();
+  const [bookingStart, setBookingStart] = useState<Date | undefined>();
 
   function navigate(dir: "prev" | "next") {
     const newWeek = dir === "next" ? addWeeks(weekStart, 1) : subWeeks(weekStart, 1);
@@ -128,9 +130,7 @@ export function WeekCalendar({
   function handleSlotClick(day: Date, slotHour: number) {
     const start = new Date(day);
     start.setHours(slotHour, 0, 0, 0);
-    const end = new Date(start);
-    end.setHours(slotHour + 1, 0, 0, 0);
-    setBookingSlot({ start, end });
+    setBookingStart(start);
     setBookingOpen(true);
   }
 
@@ -256,12 +256,12 @@ export function WeekCalendar({
       {/* Booking dialog */}
       <BookingDialog
         patients={patients}
-        initialStart={bookingSlot?.start}
-        initialEnd={bookingSlot?.end}
+        availability={availability}
+        initialStart={bookingStart}
         open={bookingOpen}
         onOpenChange={(o) => {
           setBookingOpen(o);
-          if (!o) setBookingSlot(undefined);
+          if (!o) setBookingStart(undefined);
         }}
       />
     </div>

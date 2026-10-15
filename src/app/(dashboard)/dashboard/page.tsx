@@ -9,6 +9,7 @@ import {
 } from "date-fns";
 import { Header } from "@/components/layout/header";
 import prisma from "@/lib/prisma";
+import { ensureWorkspace } from "@/lib/workspace";
 import {
   TodaysSchedule,
   type TodayAppointment,
@@ -21,7 +22,7 @@ import {
   CalendarDays,
   Users,
   Clock,
-  ReceiptEuro,
+  Receipt,
   TrendingUp,
   AlertTriangle,
 } from "lucide-react";
@@ -29,6 +30,7 @@ import {
 export default async function DashboardPage() {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
+  if (!(await ensureWorkspace(userId))) redirect("/portal/dashboard");
 
   const now        = new Date();
   const todayStart = startOfDay(now);
@@ -46,7 +48,7 @@ export default async function DashboardPage() {
   ] = await Promise.all([
     currentUser(),
 
-    prisma.workspace.findUnique({ where: { id: userId }, select: { name: true } }),
+    prisma.workspace.findUnique({ where: { id: userId }, select: { name: true, currency: true } }),
 
     // ── Today's appointments with patient + previous session note ────────────
     prisma.appointment.findMany({
@@ -165,6 +167,7 @@ export default async function DashboardPage() {
 
   const unpaidTotal   = Number(unpaidAgg._sum.totalAmount ?? 0).toFixed(2);
   const revenueTotal  = Number(revenueAgg._sum.totalAmount ?? 0).toFixed(2);
+  const currency      = workspace?.currency ?? "EUR";
 
   const stats = [
     {
@@ -187,13 +190,13 @@ export default async function DashboardPage() {
     },
     {
       label: "Unpaid invoices",
-      value: `€${unpaidTotal}`,
-      icon: ReceiptEuro,
+      value: `${unpaidTotal} ${currency}`,
+      icon: Receipt,
       description: "Total outstanding",
     },
     {
       label: "Revenue",
-      value: `€${revenueTotal}`,
+      value: `${revenueTotal} ${currency}`,
       icon: TrendingUp,
       description: "Received this month",
     },
@@ -213,36 +216,22 @@ export default async function DashboardPage() {
       <Header title="Overview" />
 
       <main className="flex-1 p-6 space-y-6">
-        {/* ── Welcome / workspace banner ── */}
-        {workspace ? (
-          <div className="rounded-xl border bg-card px-6 py-4">
-            <p className="text-sm text-muted-foreground">
-              {workspace.name}
-            </p>
-            <h2 className="mt-0.5 text-xl font-semibold">
-              Good{now.getHours() < 12 ? " morning" : now.getHours() < 18 ? " afternoon" : " evening"},{" "}
-              {firstName}.
-              {pendingAppointments.length > 0 && (
-                <span className="ml-2 text-base font-normal text-amber-600 dark:text-amber-400">
-                  {pendingAppointments.length} session
-                  {pendingAppointments.length !== 1 ? "s" : ""} still need notes.
-                </span>
-              )}
-            </h2>
-          </div>
-        ) : (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 flex items-start gap-3 dark:border-amber-900 dark:bg-amber-950/30">
-            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
-            <div>
-              <p className="font-medium text-amber-900 dark:text-amber-200">
-                No organization selected
-              </p>
-              <p className="mt-0.5 text-sm text-amber-700 dark:text-amber-400">
-                Use the switcher in the sidebar to select a clinic workspace.
-              </p>
-            </div>
-          </div>
-        )}
+        {/* ── Welcome banner ── */}
+        <div className="rounded-xl border bg-card px-6 py-4">
+          <p className="text-sm text-muted-foreground">
+            {workspace?.name}
+          </p>
+          <h2 className="mt-0.5 text-xl font-semibold">
+            Good{now.getHours() < 12 ? " morning" : now.getHours() < 18 ? " afternoon" : " evening"},{" "}
+            {firstName}.
+            {pendingAppointments.length > 0 && (
+              <span className="ml-2 text-base font-normal text-amber-600 dark:text-amber-400">
+                {pendingAppointments.length} session
+                {pendingAppointments.length !== 1 ? "s" : ""} still need notes.
+              </span>
+            )}
+          </h2>
+        </div>
 
         {/* ── Today's schedule + Pending tasks ── */}
         <div className="grid gap-4 lg:grid-cols-2">

@@ -2,11 +2,13 @@ import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { Header } from "@/components/layout/header";
 import prisma from "@/lib/prisma";
+import { ensureWorkspace } from "@/lib/workspace";
 import { SettingsForm } from "@/components/settings/settings-form";
 
 export default async function SettingsPage() {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
+  if (!(await ensureWorkspace(userId))) redirect("/portal/dashboard");
 
   const workspace = await prisma.workspace.findUnique({
     where: { id: userId },

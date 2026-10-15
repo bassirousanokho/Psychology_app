@@ -17,7 +17,10 @@ const schema = z.object({
   currency: z.string().min(1),
   workingHoursStart: z.string().regex(/^\d{2}:\d{2}$/),
   workingHoursEnd: z.string().regex(/^\d{2}:\d{2}$/),
-  workingDays: z.array(z.number()),
+  workingDays: z.array(z.number()).min(1, "Select at least one working day"),
+}).refine((d) => d.workingHoursEnd > d.workingHoursStart, {
+  message: "Day must end after it starts",
+  path: ["workingHoursEnd"],
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -75,9 +78,9 @@ export function SettingsForm({ defaults }: SettingsFormProps) {
   function toggleDay(day: number) {
     const current = workingDays ?? [];
     if (current.includes(day)) {
-      setValue("workingDays", current.filter((d) => d !== day));
+      setValue("workingDays", current.filter((d) => d !== day), { shouldValidate: true });
     } else {
-      setValue("workingDays", [...current, day].sort());
+      setValue("workingDays", [...current, day].sort(), { shouldValidate: true });
     }
   }
 
@@ -169,6 +172,9 @@ export function SettingsForm({ defaults }: SettingsFormProps) {
               );
             })}
           </div>
+          {errors.workingDays && (
+            <p className="mt-1.5 text-xs text-destructive">{errors.workingDays.message}</p>
+          )}
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -187,6 +193,9 @@ export function SettingsForm({ defaults }: SettingsFormProps) {
               type="time"
               {...register("workingHoursEnd")}
             />
+            {errors.workingHoursEnd && (
+              <p className="text-xs text-destructive">{errors.workingHoursEnd.message}</p>
+            )}
           </div>
         </div>
       </section>

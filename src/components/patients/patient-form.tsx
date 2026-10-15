@@ -3,7 +3,7 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
-import { patientSchema, type PatientFormData } from "@/lib/schemas";
+import { GENDERS, GENDER_LABELS, patientSchema, type PatientFormData } from "@/lib/schemas";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -36,6 +36,9 @@ export function PatientForm({
       lastName: "",
       email: "",
       phone: "",
+      dateOfBirth: "",
+      gender: "",
+      pronouns: "",
       backgroundNotes: "",
       ...defaultValues,
     },
@@ -100,6 +103,56 @@ export function PatientForm({
             </FormItem>
           )}
         />
+
+        <div className="grid grid-cols-3 gap-3">
+          <FormField
+            control={form.control}
+            name="dateOfBirth"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Date of birth</FormLabel>
+                <FormControl>
+                  <Input type="date" max={new Date().toISOString().slice(0, 10)} {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="gender"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Gender</FormLabel>
+                <FormControl>
+                  <select
+                    {...field}
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <option value="">—</option>
+                    {GENDERS.map((g) => (
+                      <option key={g} value={g}>{GENDER_LABELS[g]}</option>
+                    ))}
+                  </select>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="pronouns"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Pronouns</FormLabel>
+                <FormControl>
+                  <Input placeholder="elle, il, iel…" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
 
         <FormField
           control={form.control}

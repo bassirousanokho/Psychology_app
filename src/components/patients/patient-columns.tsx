@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { ColumnDef } from "@tanstack/react-table";
+import type { ColumnDef, SortingFn } from "@tanstack/react-table";
 import { MoreHorizontal, Pencil, Trash2, User } from "lucide-react";
 import { toast } from "sonner";
 import type { Patient } from "@/generated/prisma/client";
@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -27,6 +28,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { EditPatientSheet } from "./patient-sheet";
+import { formatPhone } from "@/lib/phone";
 
 // ── Row actions cell ──────────────────────────────────────────────────────────
 
@@ -58,7 +60,10 @@ function PatientRowActions({ patient }: { patient: Patient }) {
           <span className="sr-only">Open actions</span>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuLabel>Actions</DropdownMenuLabel>
+          {/* Base UI requires group labels to sit inside a group, or the menu crashes on open */}
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+          </DropdownMenuGroup>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => router.push(`/dashboard/patients/${patient.id}`)}>
             <User className="mr-2 h-4 w-4" />
@@ -114,11 +119,18 @@ function PatientRowActions({ patient }: { patient: Patient }) {
 
 // ── Column definitions ────────────────────────────────────────────────────────
 
+const collator = new Intl.Collator("fr", { sensitivity: "base", numeric: true });
+
+/** Accent- and case-insensitive text sort; empty values always last. */
+const textSort: SortingFn<Patient> = (a, b, columnId) =>
+  collator.compare(a.getValue<string>(columnId) ?? "", b.getValue<string>(columnId) ?? "");
+
 export const patientColumns: ColumnDef<Patient>[] = [
   {
     accessorFn: (row) => `${row.lastName} ${row.firstName}`,
     id: "name",
     header: "Name",
+    sortingFn: textSort,
     cell: ({ row }) => (
       <span className="font-medium">
         {row.original.lastName}, {row.original.firstName}
@@ -126,10 +138,14 @@ export const patientColumns: ColumnDef<Patient>[] = [
     ),
   },
   {
-    accessorKey: "email",
+    // undefined (not null) so sortUndefined can push empty emails to the bottom
+    accessorFn: (row) => row.email ?? undefined,
+    id: "email",
     header: "Email",
+    sortingFn: textSort,
+    sortUndefined: "last",
     cell: ({ getValue }) => {
-      const email = getValue<string | null>();
+      const email = getValue<string | undefined>();
       return email ? (
         <a href={`mailto:${email}`} className="text-primary hover:underline">
           {email}
@@ -140,17 +156,19 @@ export const patientColumns: ColumnDef<Patient>[] = [
     },
   },
   {
-    accessorKey: "phone",
+    accessorFn: (row) => formatPhone(row.phone) ?? undefined,
+    id: "phone",
     header: "Phone",
-    cell: ({ getValue }) => {
-      const phone = getValue<string | null>();
-      return phone ?? <span className="text-muted-foreground">—</span>;
-    },
+    sortingFn: textSort,
+    sortUndefined: "last",
+    cell: ({ getValue }) =>
+      getValue<string | undefined>() ?? <span className="text-muted-foreground">—</span>,
   },
   {
     accessorFn: (row) => row.createdAt,
     id: "since",
     header: "Patient since",
+    sortingFn: "datetime",
     cell: ({ getValue }) =>
       new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium" }).format(
         getValue<Date>(),
@@ -158,6 +176,7 @@ export const patientColumns: ColumnDef<Patient>[] = [
   },
   {
     id: "actions",
+    enableSorting: false,
     cell: ({ row }) => <PatientRowActions patient={row.original} />,
   },
 ];

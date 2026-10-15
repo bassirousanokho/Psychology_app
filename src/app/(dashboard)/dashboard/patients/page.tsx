@@ -5,9 +5,15 @@ import prisma from "@/lib/prisma";
 import { PatientTable } from "@/components/patients/patient-table";
 import { CreatePatientButton } from "@/components/patients/patient-sheet";
 
-export default async function PatientsPage() {
+export default async function PatientsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>;
+}) {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
+
+  const { q = "" } = await searchParams;
 
   const patients = await prisma.patient.findMany({
     where: { workspaceId: userId },
@@ -28,7 +34,8 @@ export default async function PatientsPage() {
           <CreatePatientButton />
         </div>
 
-        <PatientTable patients={patients} />
+        {/* key: a new header search re-initialises the table filter */}
+        <PatientTable key={q} patients={patients} initialQuery={q} />
       </main>
     </>
   );

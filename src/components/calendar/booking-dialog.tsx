@@ -1,17 +1,17 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { format } from "date-fns";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { addMinutes, format, isToday, parse } from "date-fns";
 import { CalendarPlus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { appointmentSchema, type AppointmentFormData } from "@/lib/schemas";
-import { createAppointment } from "@/app/(dashboard)/dashboard/calendar/actions";
+import { cn } from "@/lib/utils";
+import { createAppointment, getBusyIntervals } from "@/app/(dashboard)/dashboard/calendar/actions";
 import type { PatientOption } from "./patient-combobox";
 import { PatientCombobox } from "./patient-combobox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -19,157 +19,293 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
+
+export type Availability = {
+  workingDays: number[];      // 1=Mon … 7=Sun
+  workingHoursStart: string;  // "HH:mm"
+  workingHoursEnd: string;    // "HH:mm"
+};
+
+const DURATIONS = [30, 45, 50, 60, 75, 90, 120];
+const DEFAULT_DURATION = 60;
+const SLOT_STEP_MIN = 15;
+// Range offered when "Show all times" is on
+const EXTENDED_START = "07:00";
+const EXTENDED_END = "21:00";
+
+type Interval = { start: Date; end: Date };
+
+function toMinutes(hhmm: string): number {
+  const [h, m] = hhmm.split(":").map(Number);
+  return h * 60 + m;
+}
+
+function toHHmm(minutes: number): string {
+  return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+}
+
+function isoDay(d: Date): number {
+  return d.getDay() === 0 ? 7 : d.getDay();
+}
+
+/** Start times (HH:mm) on `date` where a session of `duration` fits without overlapping `busy`. */
+function freeStartTimes(
+  date: Date,
+  duration: number,
+  rangeStart: string,
+  rangeEnd: string,
+  busy: Interval[],
+): string[] {
+  const now = new Date();
+  const times: string[] = [];
+  for (let m = toMinutes(rangeStart); m + duration <= toMinutes(rangeEnd); m += SLOT_STEP_MIN) {
+    const start = new Date(date);
+    start.setHours(Math.floor(m / 60), m % 60, 0, 0);
+    const end = addMinutes(start, duration);
+    if (isToday(date) && start <= now) continue;
+    if (busy.some((b) => b.start < end && b.end > start)) continue;
+    times.push(toHHmm(m));
+  }
+  return times;
+}
+
+// ── Dialog ────────────────────────────────────────────────────────────────────
 
 interface BookingDialogProps {
   patients: PatientOption[];
-  // Pre-fill start/end when the user clicks an empty time slot
+  availability: Availability;
+  // Pre-fill date/start when the user clicks an empty time slot
   initialStart?: Date;
-  initialEnd?: Date;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
 export function BookingDialog({
   patients,
+  availability,
   initialStart,
-  initialEnd,
   open,
   onOpenChange,
 }: BookingDialogProps) {
-  const [isPending, startTransition] = useTransition();
-
-  const toDatetimeLocal = (d?: Date) =>
-    d ? format(d, "yyyy-MM-dd'T'HH:mm") : "";
-
-  const form = useForm<AppointmentFormData>({
-    resolver: zodResolver(appointmentSchema),
-    defaultValues: {
-      patientId: "",
-      startTime: toDatetimeLocal(initialStart),
-      endTime: toDatetimeLocal(initialEnd),
-    },
-  });
-
-  // Reset form when dialog opens with new initial values
-  function handleOpenChange(isOpen: boolean) {
-    if (isOpen) {
-      form.reset({
-        patientId: "",
-        startTime: toDatetimeLocal(initialStart),
-        endTime: toDatetimeLocal(initialEnd),
-      });
-    }
-    onOpenChange(isOpen);
-  }
-
-  function onSubmit(data: AppointmentFormData) {
-    startTransition(async () => {
-      // datetime-local values have no time zone: resolve them in the browser so the
-      // server stores the instant the practitioner actually picked
-      const result = await createAppointment({
-        ...data,
-        startTime: new Date(data.startTime).toISOString(),
-        endTime: new Date(data.endTime).toISOString(),
-      });
-      if (result.success) {
-        toast.success("Appointment booked");
-        onOpenChange(false);
-      } else {
-        toast.error(result.error);
-      }
-    });
-  }
-
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-md">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Book appointment</DialogTitle>
           <DialogDescription>
-            Select a patient and set the start and end times.
+            Pick a patient, a date and a duration, then choose a free start time.
           </DialogDescription>
         </DialogHeader>
-
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-2">
-            <FormField
-              control={form.control}
-              name="patientId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Patient *</FormLabel>
-                  <FormControl>
-                    <PatientCombobox
-                      patients={patients}
-                      value={field.value}
-                      onChange={field.onChange}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <div className="grid grid-cols-2 gap-3">
-              <FormField
-                control={form.control}
-                name="startTime"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Start *</FormLabel>
-                    <FormControl>
-                      <Input type="datetime-local" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="endTime"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>End *</FormLabel>
-                    <FormControl>
-                      <Input type="datetime-local" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isPending}>
-                {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Book appointment
-              </Button>
-            </div>
-          </form>
-        </Form>
+        {/* Mounted only while open so every opening starts from fresh values */}
+        {open && (
+          <BookingForm
+            patients={patients}
+            availability={availability}
+            initialStart={initialStart}
+            onDone={() => onOpenChange(false)}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );
 }
 
+// ── Form ──────────────────────────────────────────────────────────────────────
+
+function BookingForm({
+  patients,
+  availability,
+  initialStart,
+  onDone,
+}: {
+  patients: PatientOption[];
+  availability: Availability;
+  initialStart?: Date;
+  onDone: () => void;
+}) {
+  const initialTime = initialStart ? format(initialStart, "HH:mm") : null;
+  const outsideHours =
+    initialTime !== null &&
+    (toMinutes(initialTime) < toMinutes(availability.workingHoursStart) ||
+      toMinutes(initialTime) + DEFAULT_DURATION > toMinutes(availability.workingHoursEnd));
+
+  const [patientId, setPatientId] = useState("");
+  const [date, setDate] = useState(format(initialStart ?? new Date(), "yyyy-MM-dd"));
+  const [duration, setDuration] = useState(DEFAULT_DURATION);
+  const [startTime, setStartTime] = useState<string | null>(initialTime);
+  const [showAllTimes, setShowAllTimes] = useState(outsideHours);
+  const [busy, setBusy] = useState<Interval[] | null>(null); // null = loading
+  const [isPending, startTransition] = useTransition();
+  const latestDate = useRef(date);
+
+  function loadBusy(forDate: string) {
+    latestDate.current = forDate;
+    getBusyIntervals(forDate).then((rows) => {
+      if (latestDate.current !== forDate) return; // a newer date was picked meanwhile
+      setBusy(rows.map((r) => ({ start: new Date(r.start), end: new Date(r.end) })));
+    });
+  }
+
+  useEffect(() => {
+    loadBusy(latestDate.current);
+  }, []);
+
+  function handleDateChange(value: string) {
+    setDate(value);
+    setStartTime(null);
+    if (!value) return;
+    setBusy(null);
+    loadBusy(value);
+  }
+
+  const day = date ? parse(date, "yyyy-MM-dd", new Date()) : null;
+  const isWorkingDay = day ? availability.workingDays.includes(isoDay(day)) : true;
+  const rangeStart = showAllTimes ? EXTENDED_START : availability.workingHoursStart;
+  const rangeEnd = showAllTimes ? EXTENDED_END : availability.workingHoursEnd;
+  const times = day && busy ? freeStartTimes(day, duration, rangeStart, rangeEnd, busy) : [];
+
+  // A previously picked time may stop fitting when the duration or range changes
+  const selected = startTime && times.includes(startTime) ? startTime : null;
+  const start = day && selected ? parse(selected, "HH:mm", day) : null;
+  const end = start ? addMinutes(start, duration) : null;
+
+  function handleSubmit() {
+    if (!patientId) {
+      toast.error("Please select a patient");
+      return;
+    }
+    if (!start || !end) return;
+    startTransition(async () => {
+      const result = await createAppointment({
+        patientId,
+        startTime: start.toISOString(),
+        endTime: end.toISOString(),
+      });
+      if (result.success) {
+        toast.success("Appointment booked");
+        onDone();
+      } else {
+        toast.error(result.error);
+        loadBusy(date); // someone may have taken the slot: refresh availability
+      }
+    });
+  }
+
+  return (
+    <div className="space-y-5 pt-2">
+      {/* Patient */}
+      <div className="space-y-1.5">
+        <Label>Patient</Label>
+        <PatientCombobox patients={patients} value={patientId} onChange={setPatientId} />
+      </div>
+
+      {/* Date + duration */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <Label htmlFor="booking-date">Date</Label>
+          <Input
+            id="booking-date"
+            type="date"
+            value={date}
+            onChange={(e) => handleDateChange(e.target.value)}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="booking-duration">Duration</Label>
+          <select
+            id="booking-duration"
+            value={duration}
+            onChange={(e) => setDuration(Number(e.target.value))}
+            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {DURATIONS.map((d) => (
+              <option key={d} value={d}>
+                {d < 60 ? `${d} min` : `${Math.floor(d / 60)} h${d % 60 ? ` ${d % 60}` : ""}`}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Start times */}
+      {day && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <Label>Start time</Label>
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Switch checked={showAllTimes} onCheckedChange={setShowAllTimes} />
+              Show all times
+            </label>
+          </div>
+
+          {!isWorkingDay && (
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              {format(day, "EEEE")} is not one of your working days.
+            </p>
+          )}
+
+          {busy === null ? (
+            <p className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Checking availability…
+            </p>
+          ) : times.length === 0 ? (
+            <p className="rounded-lg bg-muted/50 px-3 py-4 text-center text-sm text-muted-foreground">
+              No free {duration}-minute slot
+              {showAllTimes ? " on this day." : " within your working hours. Try “Show all times”."}
+            </p>
+          ) : (
+            <div className="grid max-h-56 grid-cols-4 gap-1.5 overflow-y-auto pr-1 sm:grid-cols-6">
+              {times.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setStartTime(t)}
+                  className={cn(
+                    "rounded-md border px-2 py-1.5 text-sm tabular-nums transition-colors",
+                    selected === t
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-input bg-background hover:bg-muted",
+                  )}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Summary + actions */}
+      <div className="flex items-center justify-between gap-3 border-t pt-4">
+        <p className="text-sm text-muted-foreground">
+          {start && end
+            ? `${format(start, "EEE d MMM")} · ${format(start, "HH:mm")}–${format(end, "HH:mm")}`
+            : "Select a start time"}
+        </p>
+        <div className="flex gap-2">
+          <Button type="button" variant="outline" onClick={onDone}>
+            Cancel
+          </Button>
+          <Button onClick={handleSubmit} disabled={isPending || !start}>
+            {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Book
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Trigger button (standalone) ───────────────────────────────────────────────
 
-export function BookAppointmentButton({ patients }: { patients: PatientOption[] }) {
+export function BookAppointmentButton({
+  patients,
+  availability,
+}: {
+  patients: PatientOption[];
+  availability: Availability;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -177,7 +313,12 @@ export function BookAppointmentButton({ patients }: { patients: PatientOption[] 
         <CalendarPlus className="mr-2 h-4 w-4" />
         Book appointment
       </Button>
-      <BookingDialog patients={patients} open={open} onOpenChange={setOpen} />
+      <BookingDialog
+        patients={patients}
+        availability={availability}
+        open={open}
+        onOpenChange={setOpen}
+      />
     </>
   );
 }

@@ -6,6 +6,7 @@ import type { Patient } from "@/generated/prisma/client";
 import { createPatient, updatePatient } from "@/app/(dashboard)/dashboard/patients/actions";
 import type { PatientFormData } from "@/lib/schemas";
 import { PatientForm } from "./patient-form";
+import { formatPhone } from "@/lib/phone";
 import {
   Sheet,
   SheetContent,
@@ -100,7 +101,10 @@ export function EditPatientSheet({ patient, open, onOpenChange }: EditPatientShe
               firstName: patient.firstName,
               lastName: patient.lastName,
               email: patient.email ?? "",
-              phone: patient.phone ?? "",
+              phone: formatPhone(patient.phone) ?? "",
+              dateOfBirth: patient.dateOfBirth?.toISOString().slice(0, 10) ?? "",
+              gender: (patient.gender as PatientFormData["gender"]) ?? "",
+              pronouns: patient.pronouns ?? "",
               backgroundNotes: patient.backgroundNotes ?? "",
             }}
             onSubmit={handleSubmit}

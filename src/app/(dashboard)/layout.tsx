@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import prisma from "@/lib/prisma";
+import { ensureWorkspace } from "@/lib/workspace";
 
 export default async function DashboardLayout({
   children,
@@ -12,14 +13,13 @@ export default async function DashboardLayout({
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 
-  const [workspace, patientUser, pendingNotes] = await Promise.all([
+  // Patient accounts belong in the portal, never in the practitioner dashboard
+  if (!(await ensureWorkspace(userId))) redirect("/portal/dashboard");
+
+  const [workspace, pendingNotes] = await Promise.all([
     prisma.workspace.findUnique({
       where: { id: userId },
       select: { name: true },
-    }),
-    prisma.patientUser.findUnique({
-      where: { clerkUserId: userId },
-      select: { id: true },
     }),
     prisma.appointment.count({
       where: {
@@ -30,9 +30,6 @@ export default async function DashboardLayout({
       },
     }),
   ]);
-
-  // Patient accounts belong in the portal, never in the practitioner dashboard
-  if (!workspace && patientUser) redirect("/portal/dashboard");
 
   return (
     <SidebarProvider>

@@ -25,6 +25,25 @@ export async function createAppointment(data: AppointmentFormData): Promise<Acti
   });
   if (!patient) return { success: false, error: "Patient not found in this workspace" };
 
+  // Refuse double bookings (cancelled / no-show sessions free their slot)
+  const start = new Date(startTime);
+  const end = new Date(endTime);
+  const conflict = await prisma.appointment.findFirst({
+    where: {
+      workspaceId: userId,
+      status: { in: ["SCHEDULED", "COMPLETED"] },
+      startTime: { lt: end },
+      endTime: { gt: start },
+    },
+    include: { patient: { select: { firstName: true, lastName: true } } },
+  });
+  if (conflict) {
+    return {
+      success: false,
+      error: `Overlaps with ${conflict.patient.firstName} ${conflict.patient.lastName}'s session`,
+    };
+  }
+
   // Snapshot the workspace tariff at booking time
   const workspace = await prisma.workspace.findUnique({
     where: { id: userId },
@@ -37,8 +56,8 @@ export async function createAppointment(data: AppointmentFormData): Promise<Acti
         workspaceId: userId,
         patientId,
         practitionerId: userId,
-        startTime: new Date(startTime),
-        endTime: new Date(endTime),
+        startTime: start,
+        endTime: end,
         tariffAmount: workspace?.defaultTariff ?? 0,
         taxRate: workspace?.taxRate ?? 0,
       },
@@ -70,4 +89,31 @@ export async function updateAppointmentStatus(
     console.error("[updateAppointmentStatus]", err);
     return { success: false, error: "Failed to update appointment" };
   }
+}
+
+/**
+ * Busy intervals for one day (YYYY-MM-DD, practice time zone), used by the
+ * booking dialog to offer only free start times.
+ */
+export async function getBusyIntervals(
+  date: string,
+): Promise<{ start: string; end: string }[]> {
+  const { userId } = await auth();
+  if (!userId || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return [];
+
+  const dayStart = new Date(`${date}T00:00:00`);
+  const dayEnd = new Date(`${date}T23:59:59.999`);
+
+  const appts = await prisma.appointment.findMany({
+    where: {
+      workspaceId: userId,
+      status: { in: ["SCHEDULED", "COMPLETED"] },
+      startTime: { lt: dayEnd },
+      endTime: { gt: dayStart },
+    },
+    select: { startTime: true, endTime: true },
+    orderBy: { startTime: "asc" },
+  });
+
+  return appts.map((a) => ({ start: a.startTime.toISOString(), end: a.endTime.toISOString() }));
 }

@@ -17,7 +17,8 @@ export default async function BookPage() {
   cursor.setDate(cursor.getDate() + 1);
   cursor.setHours(0, 0, 0, 0);
   let count = 0;
-  while (count < 14) {
+  // Scan at most ~3 months ahead so a workspace without working days can't hang the page
+  for (let scanned = 0; count < 14 && scanned < 90; scanned++) {
     if (workspace.workingDays.includes(isoDay(cursor))) {
       const key = format(cursor, "yyyy-MM-dd");
       bookedByDate[key] = await getBookedHours(workspaceId, key);

@@ -4,7 +4,7 @@ import { startOfWeek, endOfWeek, format } from "date-fns";
 import { Header } from "@/components/layout/header";
 import prisma from "@/lib/prisma";
 import { WeekCalendar, type CalendarAppointment } from "@/components/calendar/week-calendar";
-import { BookAppointmentButton } from "@/components/calendar/booking-dialog";
+import { BookAppointmentButton, type Availability } from "@/components/calendar/booking-dialog";
 import type { PatientOption } from "@/components/calendar/patient-combobox";
 
 interface CalendarPageProps {
@@ -24,7 +24,7 @@ export default async function CalendarPage({ searchParams }: CalendarPageProps) 
   const weekISO   = format(weekStart, "yyyy-MM-dd");
 
   // Fetch appointments + patients for this workspace in parallel
-  const [rawAppointments, rawPatients] = await Promise.all([
+  const [rawAppointments, rawPatients, workspace] = await Promise.all([
     prisma.appointment.findMany({
       where: {
         workspaceId: userId,
@@ -40,7 +40,17 @@ export default async function CalendarPage({ searchParams }: CalendarPageProps) 
       select: { id: true, firstName: true, lastName: true },
       orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
     }),
+    prisma.workspace.findUnique({
+      where: { id: userId },
+      select: { workingDays: true, workingHoursStart: true, workingHoursEnd: true },
+    }),
   ]);
+
+  const availability: Availability = workspace ?? {
+    workingDays: [1, 2, 3, 4, 5],
+    workingHoursStart: "09:00",
+    workingHoursEnd: "18:00",
+  };
 
   // Serialize Dates → ISO strings before passing to Client Components
   const appointments: CalendarAppointment[] = rawAppointments.map((a) => ({
@@ -64,12 +74,13 @@ export default async function CalendarPage({ searchParams }: CalendarPageProps) 
               {appointments.length} appointment{appointments.length !== 1 ? "s" : ""} this week
             </p>
           </div>
-          <BookAppointmentButton patients={patients} />
+          <BookAppointmentButton patients={patients} availability={availability} />
         </div>
 
         <WeekCalendar
           appointments={appointments}
           patients={patients}
+          availability={availability}
           currentWeekISO={weekISO}
         />
       </main>

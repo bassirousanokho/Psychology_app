@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import { Webhook } from "svix";
 import type { UserJSON, WebhookEvent } from "@clerk/nextjs/server";
 import prisma from "@/lib/prisma";
+import { bootstrapWorkspace } from "@/lib/workspace";
 
 export async function POST(req: Request) {
   const secret = process.env.CLERK_WEBHOOK_SECRET;
@@ -46,28 +47,7 @@ export async function POST(req: Request) {
     const email = primaryEmail?.email_address ?? email_addresses[0]?.email_address ?? "";
     const name  = [first_name, last_name].filter(Boolean).join(" ") || email;
 
-    await prisma.$transaction([
-      prisma.user.upsert({
-        where: { id },
-        create: { id, email, name },
-        update: { email, name },
-      }),
-      prisma.workspace.upsert({
-        where: { id },
-        create: {
-          id,
-          name,          // user's full name is the initial practice name
-          slug: id,      // user ID is unique — can be changed later in settings
-          workingDays: [1, 2, 3, 4, 5],
-        },
-        update: {},      // don't overwrite settings the user may have changed
-      }),
-      prisma.workspaceMember.upsert({
-        where: { workspaceId_userId: { workspaceId: id, userId: id } },
-        create: { workspaceId: id, userId: id, role: "PRACTITIONER" },
-        update: {},
-      }),
-    ]);
+    await bootstrapWorkspace({ id, email, name });
   }
 
   // ── user.updated → keep email / name in sync ─────────────────────────────────

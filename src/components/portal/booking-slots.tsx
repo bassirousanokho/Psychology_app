@@ -43,7 +43,8 @@ export function BookingSlots({
   // Start from tomorrow so patients can't book same-day
   cursor.setDate(cursor.getDate() + 1);
   cursor.setHours(0, 0, 0, 0);
-  while (availableDates.length < 14) {
+  // Scan at most ~3 months ahead so a workspace without working days can't hang the page
+  for (let scanned = 0; availableDates.length < 14 && scanned < 90; scanned++) {
     if (workingDays.includes(isoDay(cursor))) {
       availableDates.push(new Date(cursor));
     }

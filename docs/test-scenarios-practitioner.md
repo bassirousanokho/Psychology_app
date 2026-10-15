@@ -15,14 +15,14 @@ Manual end-to-end test plan covering everything a practitioner does in the app, 
 
 ### 0.1 Environment
 
-- [ ] App URL is reachable (Cloud Run URL or `http://localhost:3000`).
-- [ ] `.env` / Cloud Run env vars are all set: `DATABASE_URL`, Clerk keys, `CLERK_WEBHOOK_SECRET`, `ENCRYPTION_KEY`, `GCS_BUCKET_NAME`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `NEXT_PUBLIC_APP_URL`, `CRON_SECRET`.
-- [ ] `NEXT_PUBLIC_APP_URL` matches the URL you are testing on (invite and invoice links are built from it).
-- [ ] Database migrations are applied (`npx prisma migrate deploy`).
-- [ ] `TZ` is unset or `Europe/Paris` on Cloud Run (the app defaults to Europe/Paris).
-- [ ] Clerk webhook endpoint points at `<app-url>/api/webhooks/clerk` and is subscribed to `user.created` and `user.updated`.
-- [ ] GCS bucket has a CORS rule for the app's origin (`gsutil cors get gs://<bucket>`).
-- [ ] Resend sending domain is verified (or accept that emails are only logged to the server console).
+- [X] App URL is reachable (Cloud Run URL or `http://localhost:3000`).
+- [X] `.env` / Cloud Run env vars are all set: `DATABASE_URL`, Clerk keys, `CLERK_WEBHOOK_SECRET`, `ENCRYPTION_KEY`, `GCS_BUCKET_NAME`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `NEXT_PUBLIC_APP_URL`, `CRON_SECRET`.
+- [X] `NEXT_PUBLIC_APP_URL` matches the URL you are testing on (invite and invoice links are built from it).
+- [X] Database migrations are applied (`npx prisma migrate deploy`).
+- [X] `TZ` is unset or `Europe/Paris` on Cloud Run (the app defaults to Europe/Paris).
+- [X] Clerk webhook endpoint points at `<app-url>/api/webhooks/clerk` and is subscribed to `user.created` and `user.updated`.
+- [X] GCS bucket has a CORS rule for the app's origin (`gsutil cors get gs://<bucket>`).
+- [X] Resend sending domain is verified (or accept that emails are only logged to the server console).
 
 ### 0.2 Test accounts and data
 
@@ -45,33 +45,35 @@ Prepare before starting:
 1. Open the app URL while signed out.
 2. You are redirected to sign in. Click through to sign up and create Practitioner A with first name + last name.
 
-- [ ] `/` redirects to `/dashboard`, which redirects to `/sign-in`.
-- [ ] Sign-up completes and lands on `/dashboard`.
-- [ ] DB check: `User`, `Workspace` (id = Clerk user id, `workingDays = [1,2,3,4,5]`) and `WorkspaceMember` (role `PRACTITIONER`) rows exist.
-- [ ] Sidebar header shows your full name as the practice name.
-- [ ] Overview greets you by first name with the right "Good morning / afternoon / evening" for French local time.
-- [ ] No "No organization selected" banner. If you see it, the Clerk webhook didn't reach the app: check its delivery log in the Clerk dashboard.
+- [X] `/` redirects to `/dashboard`, which redirects to `/sign-in`.
+- [X] Sign-up completes and lands on `/dashboard`. comment : This message pops : No organization selected
+Use the switcher in the sidebar to select a clinic workspace (outDated probably we could assume independant and make it editable)
+- [X] DB check: `User`, `Workspace` (id = Clerk user id, `workingDays = [1,2,3,4,5]`) and `WorkspaceMember` (role `PRACTITIONER`) rows exist.
+- [X] Sidebar header shows your full name as the practice name.
+- [X] Overview greets you by first name with the right "Good morning / afternoon / evening" for French local time.
+- [X] No "No organization selected" banner (removed: the workspace is now created on first dashboard visit if the webhook hasn't arrived).
+- [X] Clerk dashboard → Webhooks → your endpoint: the `user.created` delivery shows **200**.
 
 ### 1.2 Sign out / sign back in
 
-- [ ] User button (bottom of sidebar) shows your name and offers sign out.
-- [ ] After signing out, visiting any `/dashboard/...` URL redirects to sign-in.
-- [ ] Signing back in returns to the dashboard with all data intact.
+- [X] User button (bottom of sidebar) shows your name and offers sign out.
+- [X] After signing out, visiting any `/dashboard/...` URL redirects to sign-in.
+- [X] Signing back in returns to the dashboard with all data intact.
 
 ### 1.3 Profile change sync
 
 1. In the Clerk user menu, change your last name.
 
-- [ ] DB check: `User.name` is updated (via `user.updated` webhook).
-- [ ] Note: the sidebar practice name does **not** change (it's the workspace name, set once at sign-up). There is no setting to rename the practice.
+- [X] DB check: `User.name` is updated (via `user.updated` webhook).
+- [X] Note: the sidebar practice name does **not** change (it's the workspace name, set once at sign-up). There is no setting to rename the practice.
 
 ### 1.4 Empty states (brand-new account)
 
-- [ ] Overview: "No appointments scheduled for today", "All sessions are documented", all stats at 0 / €0.00.
-- [ ] Patients: "No patients yet. Add your first one!" and "0 patients in this workspace".
-- [ ] Calendar: empty week grid, "0 appointments this week".
-- [ ] Billing: "No invoices yet. Generate one from a completed appointment." and all stat cards at 0.
-- [ ] Clinical Notes: placeholder page ("coming in Milestone 4"). This is expected for now, but note that the sidebar badge links here.
+- [X] Overview: "No appointments scheduled for today", "All sessions are documented", all stats at 0 / €0.00.
+- [X] Patients: "No patients yet. Add your first one!" and "0 patients in this workspace".
+- [X] Calendar: empty week grid, "0 appointments this week".
+- [X] Billing: "No invoices yet. Generate one from a completed appointment." and all stat cards at 0.
+- [X] Clinical Notes: placeholder page ("coming in Milestone 4"). This is expected for now, but note that the sidebar badge links here.
 
 ---
 
@@ -81,37 +83,39 @@ Go to **Settings**.
 
 ### 2.1 Defaults are loaded
 
-- [ ] Session tariff 0, tax rate 0, currency EUR, Mon–Fri selected, 09:00 → 18:00.
+- [X] Session tariff 0, tax rate 0, currency EUR, Mon–Fri selected, 09:00 → 18:00.
 
 ### 2.2 Save valid billing defaults
 
 1. Set tariff `70`, tax rate `0`, currency `EUR`. Save.
 
-- [ ] Toast "Settings saved".
-- [ ] Reload the page: values persist.
-- [ ] Tariff accepts decimals (`72.50`) and saves them exactly.
+- [X] Toast "Settings saved".
+- [X] Reload the page: values persist.
+- [X] Tariff accepts decimals (`72.50`) and saves them exactly.
 
 ### 2.3 Validation
 
-- [ ] Negative tariff is rejected (browser `min=0` or error message).
-- [ ] Tax rate `101` is rejected.
-- [ ] Tax rate `5.5` saves. Remember it for the invoice test in §8. ⚠️ The public invoice prints the rate rounded (`Tax (6%)`).
-- [ ] Day end earlier than day start (e.g. 18:00 → 09:00): ⚠️ currently accepted with no warning. Note the behaviour, then restore 09:00 → 18:00.
-- [ ] Toggling working days on/off highlights/unhighlights each button; saving persists the selection.
-- [ ] ⚠️ **Do not save with zero working days on a shared environment** without a patient-portal session ready to observe: the portal booking page loops forever looking for working days. If you test it, open `/portal/book` as the invited patient (§5) and confirm whether the page hangs, then restore Mon–Fri immediately.
-- [ ] Saturday-only or 7-day weeks save correctly.
+- [x] Negative tariff is rejected (browser `min=0` or error message).
+- [x] Tax rate `101` is rejected.
+- [x] Tax rate `5.5` saves. Remember it for the invoice test in §8. ⚠️ The public invoice prints the rate rounded (`Tax (6%)`).
+- [X] Day end earlier than day start (e.g. 18:00 → 09:00): ⚠️ currently accepted with no warning. Note the behaviour, then restore 09:00 → 18:00.
+- [X] Toggling working days on/off highlights/unhighlights each button; saving persists the selection.
+- [ ] ⚠️ **Do not save with zero working days on a shared environment** without a patient-portal session ready to observe: the portal booking page loops forever looking for working days. If you test it, open `/portal/book` as the invited patient (§5) and confirm whether the page hangs, then restore Mon–Fri immediately. comment : seems to save anyway
+- [X] Saturday-only or 7-day weeks save correctly.
+- [ ] **Retest (fixed):** deselecting every working day shows "Select at least one working day" and Save is refused.
+- [ ] **Retest (fixed):** day end before day start (18:00 → 09:00) shows "Day must end after it starts" under "Day ends at" and Save is refused.
 
 ### 2.4 Currency
 
 1. Change currency to `CHF`, save.
 
-- [ ] Billing page and invoice panel show `CHF`.
-- [ ] ⚠️ Overview stat cards still show `€` (hard-coded), and the patient profile session list shows `€`.
-- [ ] Restore `EUR`.
+- [X] Billing page and invoice panel show `CHF`.
+- [X] ⚠️ Overview stat cards still show `€` (hard-coded), and the patient profile session list shows `€`. comment : change this!
+- [x] Restore `EUR`.
 
 ### 2.5 Tariff snapshot
 
-- [ ] Book an appointment (see §6), then change the default tariff to `80`. The existing appointment keeps `70`; new bookings use `80`. Restore `70` after.
+- [X] Book an appointment (see §6), then change the default tariff to `80`. The existing appointment keeps `70`; new bookings use `80`. Restore `70` after.
 
 ---
 
@@ -123,38 +127,46 @@ Go to **Patients**.
 
 1. Click **New patient**. Enter only first name `Marie`, last name `Dupont`. Save.
 
-- [ ] Toast "Patient created", sheet closes.
-- [ ] Row appears immediately: "Dupont, Marie", email and phone shown as "—", "Patient since" = today in French date format.
-- [ ] Counter shows "1 patient in this workspace".
+- [X] Toast "Patient created", sheet closes.
+- [X] Row appears immediately: "Dupont, Marie", email and phone shown as "—", "Patient since" = today in French date format.
+- [X] Counter shows "1 patient in this workspace".
 
 ### 3.2 Create a patient: full
 
 1. Create `Jean Martin` with email (use your **patient email**), phone `+33 6 12 34 56 78`, background notes spanning several lines.
 
-- [ ] Saved; email shows as a clickable `mailto:` link.
-- [ ] Multi-line background notes keep their line breaks on the profile page.
+- [x] Saved; email shows as a clickable `mailto:` link. 
+- [ ] Multi-line background notes keep their line breaks on the profile page. comment : This page couldn’t load
+Reload to try again, or go back. when i try modify patient background details. I do not see the profile page either. 
+- [ ] **Retest (fixed: the row menu crashed on open):** row menu (⋯) opens; **View profile** and **Edit** both work.
 
 ### 3.3 Form validation
 
-- [ ] Empty first name → "First name is required"; empty last name → "Last name is required". Nothing is saved.
-- [ ] Invalid email (`jean@`) → "Invalid email address".
-- [ ] Cancel button closes the sheet without saving.
-- [ ] Double-clicking **Save patient** quickly creates only one patient.
-- [ ] Names with accents, apostrophes and hyphens (`Éloïse O'Brien-Lefèvre`) save and display correctly.
-- [ ] Very long name (80+ chars) doesn't break the table layout.
-- [ ] Note: there is no date-of-birth field, although the database has one.
+- [x] Empty first name → "First name is required"; empty last name → "Last name is required". Nothing is saved.
+- [x] Invalid email (`jean@`) → "Invalid email address".
+- [x] Cancel button closes the sheet without saving.
+- [x] Double-clicking **Save patient** quickly creates only one patient.
+- [x] Names with accents, apostrophes and hyphens (`Éloïse O'Brien-Lefèvre`) save and display correctly.
+- [x] Very long name (80+ chars) doesn't break the table layout.
+- [ ] Note: there is no date-of-birth field, although the database has one. comment: let's add it (not mandatory) + Male / female /other / pronouns
+- [ ] **Retest (added):** optional Date of birth, Gender (—, Female, Male, Other) and Pronouns fields. A future date of birth is refused. The profile shows "12 May 1990 (36 y/o)" and "Female · elle"; editing pre-fills them; the GDPR export includes them.
+- [ ] **Retest (added):** phone is normalised on save: `0612345678`, `06 12 34 56 78` and `+33612345678` all become `+33 6 12 34 56 78`; `+41 79 123 45 67` stays Swiss; `12345` → "Invalid phone number".
 
 ### 3.4 Create a set of test patients
 
 Create at least 6 patients in total (useful for search, sorting and the booking combobox).
 
+COMMENT : phone number in patients page is not normalized (sometimes spaces others not)
 ### 3.5 Search and sort
 
-- [ ] Search by last name, by first name, by part of an email, by phone digits: matching rows only.
-- [ ] Search is case-insensitive and ignores leading/trailing spaces.
-- [ ] No match → "No patients match your search."; footer counter updates.
-- [ ] Clicking **Name**, **Email**, **Phone**, **Patient since** headers sorts ascending then descending.
-- [ ] ⚠️ The search box in the top header bar ("Search patients…") does nothing. Only the search above the table works. The bell icon also does nothing.
+- [ ] Search by last name, by first name, by part of an email, by phone digits: matching rows only. Comment : failes email + phones
+- [ ] Search is case-insensitive and ignores leading/trailing spaces. Comment fails leading space
+- [x] No match → "No patients match your search."; footer counter updates.
+- [ ] Clicking **Name**, **Email**, **Phone**, **Patient since** headers sorts ascending then descending. Comment : sorting is weird (does not alwway work, check)
+- [ ] ⚠️ The search box in the top header bar ("Search patients…") does nothing. Only the search above the table works. The bell icon also does nothing. Comment remove it or make it visible in all pages.
+- [ ] **Retest (fixed):** search finds email fragments and phone digits in any format (`0612`, `06 12 34`, `+33 6 12`), ignores accents, case and surrounding spaces, and matches "jean martin" or "martin jean".
+- [ ] **Retest (fixed):** list starts sorted by name; headers show ↑/↓ and toggle between ascending and descending; accents sort naturally (Éloïse between Dupont and Martin); empty emails/phones always last.
+- [ ] **Retest (changed):** the header search works on every dashboard page: type and press Enter → patients list filtered by that query. The bell is gone.
 
 ### 3.6 Edit a patient
 
@@ -298,30 +310,39 @@ Go to **Calendar**.
 
 ### 6.2 Book via the button
 
-1. **Book appointment** → pick a patient via the search combobox → set start/end → **Book appointment**.
+1. **Book appointment** → pick a patient → pick a date → pick a duration → click a free start time → **Book**.
 
+- [ ] Date defaults to today; duration defaults to 60 min (options 30, 45, 50, 60, 75, 90, 120).
 - [ ] Combobox search filters by name; "No patients found." for no match.
-- [ ] Missing patient → "Please select a patient".
-- [ ] End before start → "End time must be after start time".
+- [ ] Only free start times are offered, in 15-minute steps, inside your working hours (Settings). A 60-min session can't start later than 1 h before the day ends.
+- [ ] Times that overlap an existing session are not offered (book 10:00–11:00, reopen: 09:15–10:45 are missing, 09:00 and 11:00 are offered).
+- [ ] For today, past times are not offered.
+- [ ] Changing the duration updates the list; a selected time that no longer fits is deselected and **Book** is disabled.
+- [ ] Changing the date shows "Checking availability…", then that day's free times.
+- [ ] Summary line shows "Wed 15 Oct · 10:00–11:00" before booking.
+- [ ] Clicking **Book** without a patient → "Please select a patient".
 - [ ] Success: toast "Appointment booked", dialog closes, block appears on the right day and time with patient name and times, status "Scheduled" (blue).
-- [ ] **Time zone:** book 14:00 and check it shows 14:00 on the calendar, the session page, the patient profile and (if invited) the patient portal. Fixed, but retest on Cloud Run specifically.
+- [ ] **Time zone:** book 14:00 and check it shows 14:00 on the calendar, the session page, the patient profile and (if invited) the patient portal.
 - [ ] Header counter "N appointments this week" updates.
 
 ### 6.3 Book by clicking a slot
 
 1. Click an empty hour cell (e.g. Wednesday 10:00).
 
-- [ ] Dialog opens pre-filled with 10:00 → 11:00 on that day.
-- [ ] ⚠️ Clicking a second slot after closing the dialog: check the pre-fill updates to the new slot and isn't stuck on the previous one.
+- [ ] Dialog opens with that date and 10:00 selected.
+- [ ] Close it and click another slot: the new date/time is pre-selected (not the previous one).
+- [ ] Clicking a slot outside working hours (e.g. 19:00) opens with "Show all times" switched on and 19:00 selected.
+- [ ] Clicking a slot that's already taken opens with no time selected.
 
 ### 6.4 Edge cases
 
-- [ ] Book two appointments at the same time: ⚠️ currently accepted (no overlap check for practitioner bookings). Blocks overlap visually.
-- [ ] Book 07:00–07:45 or 20:30–21:30: ⚠️ saved, but drawn clamped to the top/bottom edge of the grid.
+- [ ] Double booking is refused: open the dialog in two tabs, book the same time in both. The second shows "Overlaps with <patient>'s session" and refreshes the free times.
+- [ ] A cancelled or no-show session frees its slot (once cancelling exists, see 6.5).
+- [ ] "Show all times" offers 07:00–21:00 for out-of-hours sessions. ⚠️ Sessions before 08:00 or after 20:00 are drawn clamped to the top/bottom edge of the grid.
 - [ ] Book a 30-min, a 45-min and a 90-min session: block heights look proportional.
-- [ ] Book on a non-working day (Sunday): accepted (working days only restrict patient self-booking).
-- [ ] Book in the past (yesterday): accepted, then it appears in "Missing notes" on the Overview.
-- [ ] Appointment spanning midnight: note behaviour.
+- [ ] Non-working day (Sunday): note "Sunday is not one of your working days", but booking is still allowed.
+- [ ] Book in the past (pick yesterday's date): allowed, then it appears in "Missing notes" on the Overview.
+- [ ] Day fully booked: "No free 60-minute slot within your working hours. Try “Show all times”."
 
 ### 6.5 Open / manage an appointment from the calendar
 
@@ -580,18 +601,18 @@ Found by reading the code while writing this plan, then verified on 2026-10-15. 
 | 5 | 🟠 Major | Calendar | Appointment blocks have no click handler. `updateAppointmentStatus` exists but no UI calls it, so there's no way to cancel, mark no-show, reschedule or delete. | Confirmed (code) | 6.5 |
 | 6 | 🟠 Major | Pre-session prep | Previous session notes are passed to the dialog without `decrypt()`, so the practitioner sees `enc:…`. | Confirmed (code) | 7.1 |
 | 7 | 🟠 Major | Patient deletion | Cascades to invoices (accounting history lost) and never deletes the patient's GCS files (orphaned health data). | Confirmed (`ON DELETE CASCADE`; `deletePatient` doesn't call GCS) | 11.3 |
-| 8 | 🟠 Major | Settings | Saving zero working days makes `/portal/book` loop forever (page hangs, server CPU pinned). End hour before start hour is accepted. | Confirmed (loop simulated: never terminates) | 2.3 |
+| 8 | 🟠 Major | Settings | Saving zero working days makes `/portal/book` loop forever (page hangs, server CPU pinned). End hour before start hour is accepted. | ✅ Fixed — retest (both rejected at save; portal loop bounded) | 2.3 |
 | 9 | 🟠 Major | Touch devices | Tailwind v4 only applies `group-hover` on devices that support hover, so on phones/tablets the document actions and "Write notes" stay **invisible but tappable**. You can delete a document by tapping an empty-looking area. | Likely (confirm on a real phone) | 4.6, 7.1 |
 | 10 | 🟡 Minor | Invoice panel | Keeps its initial state after "Generate invoice", so the button stays until reload and a second click gives "Invoice already exists". | Confirmed (code) | 8.1 |
 | 11 | 🟡 Minor | Documents | List keeps its initial state, so new uploads only appear after a reload. Success toast fires before the database record is saved. | Confirmed (code) | 4.1 |
 | 12 | 🟡 Minor | Access control | Dashboard only checks "signed in", not "is a practitioner". Hidden today by #2 (everyone gets a workspace), but it becomes real once #2 is fixed. | ✅ Fixed — retest (patients are redirected to the portal) | 11.5 |
-| 13 | 🟡 Minor | Calendar | No overlap check for practitioner bookings; sessions outside 08:00–20:00 are drawn clamped to the edges. | Confirmed (code) | 6.4 |
+| 13 | 🟡 Minor | Calendar | No overlap check for practitioner bookings; sessions outside 08:00–20:00 are drawn clamped to the edges. | ✅ Overlaps fixed (new booking flow) — clamping remains | 6.4 |
 | 14 | 🟡 Minor | Portal booking | Availability only blocks the start hour of existing appointments, so a free-looking slot can fail with "no longer available". | Confirmed (code) | 6.6 |
 | 15 | 🟡 Minor | Session reopen | Sets status back to Scheduled, which hides the invoice panel of an invoiced session. | Confirmed (code) | 7.4 |
-| 16 | 🟡 Minor | Currency | `€` hard-coded on Overview stats and patient session history. | Confirmed (code) | 2.4 |
+| 16 | 🟡 Minor | Currency | `€` hard-coded on Overview stats and patient session history. | ✅ Fixed — retest | 2.4 |
 | 17 | 🟡 Minor | Documents | Delete has no confirmation; signed links expire after 15 min on an open page. | Confirmed (code) | 4.3, 4.5 |
 | 18 | 🟡 Minor | Billing | "Mark sent" sends no email; "Paid" can't be undone; list capped at 50 rows. | Confirmed (code) | 9.1, 9.2 |
 | 19 | 🟡 Minor | Invoice content | No practitioner address / professional ID / legal mentions; tax rate printed rounded (5.5 % → "6%"). | Confirmed (code) | 8.2, 2.3 |
-| 20 | ⚪ Cosmetic | Header | Header search box and notification bell do nothing. | Confirmed (code) | 3.5 |
+| 20 | ⚪ Cosmetic | Header | Header search box and notification bell do nothing. | ✅ Fixed — search works from every page, bell removed | 3.5 |
 | 21 | ⚪ Cosmetic | Notes page | Clinical Notes is a placeholder, but the sidebar badge and "View all" point to it. | Confirmed (code) | 1.4, 7.1 |
 | 22 | ⚪ Cosmetic | Practice name | Can't be changed after sign-up. | Confirmed (code) | 1.3 |

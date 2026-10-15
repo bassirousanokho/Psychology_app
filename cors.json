@@ -1,6 +1,6 @@
 [
   {
-    "origin": ["http://localhost:3000", "https://psy-app-xxxxxxxx-ew.a.run.app"],
+    "origin": ["http://localhost:3000", "https://psy-app-804784013458.europe-west1.run.app"],
     "method": ["PUT", "GET"],
     "responseHeader": ["Content-Type"],
     "maxAgeSeconds": 3600

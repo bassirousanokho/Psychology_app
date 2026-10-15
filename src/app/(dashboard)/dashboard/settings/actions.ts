@@ -12,7 +12,12 @@ const settingsSchema = z.object({
   currency: z.string().min(1),
   workingHoursStart: z.string().regex(/^\d{2}:\d{2}$/, "Invalid time format"),
   workingHoursEnd: z.string().regex(/^\d{2}:\d{2}$/, "Invalid time format"),
-  workingDays: z.array(z.coerce.number().int().min(1).max(7)),
+  workingDays: z
+    .array(z.coerce.number().int().min(1).max(7))
+    .min(1, "Select at least one working day"),
+}).refine((d) => d.workingHoursEnd > d.workingHoursStart, {
+  message: "Day must end after it starts",
+  path: ["workingHoursEnd"],
 });
 
 export type SettingsFormData = z.infer<typeof settingsSchema>;
@@ -78,7 +83,9 @@ export async function exportPatientData() {
     lastName: p.lastName,
     email: p.email,
     phone: p.phone,
-    dateOfBirth: p.dateOfBirth?.toISOString() ?? null,
+    dateOfBirth: p.dateOfBirth?.toISOString().slice(0, 10) ?? null,
+    gender: p.gender,
+    pronouns: p.pronouns,
     backgroundNotes: p.backgroundNotes,
     createdAt: p.createdAt.toISOString(),
     appointments: p.appointments.map((a) => ({

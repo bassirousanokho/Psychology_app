@@ -7,11 +7,13 @@ import {
   getFilteredRowModel,
   getSortedRowModel,
   useReactTable,
+  type FilterFn,
   type SortingState,
 } from "@tanstack/react-table";
-import { ArrowUpDown, Search } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Search } from "lucide-react";
 import type { Patient } from "@/generated/prisma/client";
 import { patientColumns } from "./patient-columns";
+import { phoneSearchDigits } from "@/lib/phone";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,11 +27,28 @@ import {
 
 interface PatientTableProps {
   patients: Patient[];
+  initialQuery?: string;
 }
 
-export function PatientTable({ patients }: PatientTableProps) {
-  const [sorting, setSorting] = useState<SortingState>([]);
-  const [globalFilter, setGlobalFilter] = useState("");
+/** Lowercase, accent-free, trimmed — so "  éloïse" matches "Eloise". */
+function normalize(text: string): string {
+  return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+}
+
+/** Matches name or email by text, and phone by digits in any format (06…, +33 6…, 336…). */
+const patientSearch: FilterFn<Patient> = (row, _columnId, query: string) => {
+  const q = normalize(query);
+  if (!q) return true;
+  const p = row.original;
+  const text = normalize(`${p.lastName} ${p.firstName} ${p.firstName} ${p.lastName} ${p.email ?? ""}`);
+  if (text.includes(q)) return true;
+  const digits = q.replace(/\D/g, "");
+  return digits.length >= 2 && phoneSearchDigits(p.phone).some((d) => d.includes(digits));
+};
+
+export function PatientTable({ patients, initialQuery = "" }: PatientTableProps) {
+  const [sorting, setSorting] = useState<SortingState>([{ id: "name", desc: false }]);
+  const [globalFilter, setGlobalFilter] = useState(initialQuery);
 
   const table = useReactTable({
     data: patients,
@@ -37,6 +56,8 @@ export function PatientTable({ patients }: PatientTableProps) {
     state: { sorting, globalFilter },
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
+    globalFilterFn: patientSearch,
+    enableSortingRemoval: false, // header clicks toggle asc ↔ desc, never back to "unsorted"
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -71,7 +92,13 @@ export function PatientTable({ patients }: PatientTableProps) {
                         onClick={header.column.getToggleSortingHandler()}
                       >
                         {flexRender(header.column.columnDef.header, header.getContext())}
-                        <ArrowUpDown className="ml-2 h-3 w-3" />
+                        {header.column.getIsSorted() === "asc" ? (
+                          <ArrowUp className="ml-2 h-3 w-3" />
+                        ) : header.column.getIsSorted() === "desc" ? (
+                          <ArrowDown className="ml-2 h-3 w-3" />
+                        ) : (
+                          <ArrowUpDown className="ml-2 h-3 w-3 opacity-40" />
+                        )}
                       </Button>
                     ) : (
                       flexRender(header.column.columnDef.header, header.getContext())

@@ -1,8 +1,8 @@
 import { auth } from "@clerk/nextjs/server";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { format } from "date-fns";
-import { ArrowLeft, CalendarDays, Mail, Phone } from "lucide-react";
+import { differenceInYears, format } from "date-fns";
+import { ArrowLeft, Cake, CalendarDays, Mail, Phone, UserRound } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import prisma from "@/lib/prisma";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,8 @@ import { DocumentList } from "@/components/documents/document-list";
 import { InviteButton } from "@/components/portal/invite-button";
 import { audit } from "@/lib/tenant";
 import { getSignedReadUrl } from "@/lib/gcs";
+import { formatPhone } from "@/lib/phone";
+import { GENDER_LABELS } from "@/lib/schemas";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -49,6 +51,7 @@ export default async function PatientProfilePage({ params }: PageProps) {
         orderBy: { createdAt: "desc" },
       },
       portalUser: { select: { id: true } },
+      workspace: { select: { currency: true } },
     },
   });
 
@@ -114,7 +117,22 @@ export default async function PatientProfilePage({ params }: PageProps) {
               {patient.phone && (
                 <span className="flex items-center gap-1.5">
                   <Phone className="h-3.5 w-3.5" />
-                  {patient.phone}
+                  {formatPhone(patient.phone)}
+                </span>
+              )}
+              {patient.dateOfBirth && (
+                <span className="flex items-center gap-1.5">
+                  <Cake className="h-3.5 w-3.5" />
+                  {format(patient.dateOfBirth, "d MMMM yyyy")} ({differenceInYears(new Date(), patient.dateOfBirth)} y/o)
+                </span>
+              )}
+              {(patient.gender || patient.pronouns) && (
+                <span className="flex items-center gap-1.5">
+                  <UserRound className="h-3.5 w-3.5" />
+                  {[
+                    patient.gender && GENDER_LABELS[patient.gender as keyof typeof GENDER_LABELS],
+                    patient.pronouns,
+                  ].filter(Boolean).join(" · ")}
                 </span>
               )}
               <span className="flex items-center gap-1.5">
@@ -161,7 +179,7 @@ export default async function PatientProfilePage({ params }: PageProps) {
                       <p className="text-xs text-muted-foreground">
                         {format(appt.startTime, "HH:mm")} –{" "}
                         {format(appt.endTime, "HH:mm")} ·{" "}
-                        {Number(appt.tariffAmount).toFixed(2)} €
+                        {Number(appt.tariffAmount).toFixed(2)} {patient.workspace.currency}
                       </p>
                     </div>
                     <Badge variant={STATUS_VARIANTS[appt.status]}>

@@ -6,8 +6,13 @@ import { z } from "zod";
 import prisma from "@/lib/prisma";
 import { audit } from "@/lib/tenant";
 
+// The practice psychotherapy rate is changed through changePracticeRate (rates/actions.ts)
 const settingsSchema = z.object({
-  defaultTariff: z.coerce.number().min(0, "Must be 0 or greater"),
+  hourlyRateAdmin: z.coerce.number().min(0, "Must be 0 or greater"),
+  hourlyRateWriting: z.coerce.number().min(0, "Must be 0 or greater"),
+  cancellationNoticeHours: z.coerce.number().int().min(0).max(720, "At most 30 days"),
+  cancellationAlertThreshold: z.coerce.number().int().min(1, "At least 1").max(50),
+  retentionYears: z.coerce.number().int().min(1, "At least 1 year").max(50),
   taxRate: z.coerce.number().min(0).max(100, "Must be between 0 and 100"),
   currency: z.string().min(1),
   workingHoursStart: z.string().regex(/^\d{2}:\d{2}$/, "Invalid time format"),
@@ -31,12 +36,9 @@ export async function updateSettings(data: SettingsFormData) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Invalid data" };
   }
 
-  const { defaultTariff, taxRate, currency, workingHoursStart, workingHoursEnd, workingDays } =
-    parsed.data;
-
   await prisma.workspace.update({
     where: { id: userId },
-    data: { defaultTariff, taxRate, currency, workingHoursStart, workingHoursEnd, workingDays },
+    data: parsed.data,
   });
 
   revalidatePath("/dashboard/settings");
@@ -58,6 +60,9 @@ export async function exportPatientData() {
           startTime: true,
           endTime: true,
           status: true,
+          type: true,
+          cancelledAt: true,
+          cancellationFee: true,
           tariffAmount: true,
           taxRate: true,
           noteCompletedAt: true,
@@ -86,13 +91,24 @@ export async function exportPatientData() {
     dateOfBirth: p.dateOfBirth?.toISOString().slice(0, 10) ?? null,
     gender: p.gender,
     pronouns: p.pronouns,
+    emergencyContact: {
+      name: p.emergencyContactName,
+      relation: p.emergencyContactRelation,
+      phone: p.emergencyContactPhone,
+    },
+    familyDoctor: { name: p.doctorName, phone: p.doctorPhone },
+    sessionRate: p.tariff !== null ? Number(p.tariff) : null,
     backgroundNotes: p.backgroundNotes,
     createdAt: p.createdAt.toISOString(),
+    deletedAt: p.deletedAt?.toISOString() ?? null,
     appointments: p.appointments.map((a) => ({
       id: a.id,
       startTime: a.startTime.toISOString(),
       endTime: a.endTime.toISOString(),
       status: a.status,
+      type: a.type,
+      cancelledAt: a.cancelledAt?.toISOString() ?? null,
+      cancellationFee: a.cancellationFee !== null ? Number(a.cancellationFee) : null,
       tariffAmount: Number(a.tariffAmount),
       noteCompletedAt: a.noteCompletedAt?.toISOString() ?? null,
     })),

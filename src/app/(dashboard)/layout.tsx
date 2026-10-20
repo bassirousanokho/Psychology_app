@@ -26,6 +26,7 @@ export default async function DashboardLayout({
         workspaceId: userId,
         endTime: { lt: new Date() },
         noteCompletedAt: null,
+        type: "PSYCHOTHERAPY", // notes are optional for hourly work
         status: { notIn: ["CANCELLED", "NO_SHOW"] },
       },
     }),

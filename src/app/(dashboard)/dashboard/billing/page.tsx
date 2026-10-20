@@ -47,6 +47,7 @@ export default async function BillingPage() {
     status: inv.status as InvoiceRow["status"],
     dueDate: inv.dueDate.toISOString(),
     paidAt: inv.paidAt?.toISOString() ?? null,
+    receiptSentAt: inv.receiptSentAt?.toISOString() ?? null,
     publicToken: inv.publicToken,
   }));
 

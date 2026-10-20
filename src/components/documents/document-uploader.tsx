@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { Upload, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,17 +9,23 @@ import { createUploadUrl, confirmDocumentUpload } from "@/app/(dashboard)/dashbo
 interface DocumentUploaderProps {
   patientId: string;
   appointmentId?: string;
+  isSessionNote?: boolean;
+  label?: string;
 }
 
 const ACCEPT = ".pdf,.png,.jpg,.jpeg,.webp";
 const MAX_MB = 16;
 
-export function DocumentUploader({ patientId, appointmentId }: DocumentUploaderProps) {
+export function DocumentUploader({
+  patientId,
+  appointmentId,
+  isSessionNote,
+  label = "Upload document",
+}: DocumentUploaderProps) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [isPending, startTransition] = useTransition();
   const [uploading, setUploading] = useState(false);
 
-  const busy = isPending || uploading;
+  const busy = uploading;
 
   async function handleFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
@@ -56,20 +62,20 @@ export function DocumentUploader({ patientId, appointmentId }: DocumentUploaderP
           continue;
         }
 
-        uploaded.push(file);
-        startTransition(async () => {
-          const result = await confirmDocumentUpload({
-            patientId,
-            appointmentId,
-            key: urlResult.key!,
-            name: file.name,
-            fileType: file.type,
-            fileSize: file.size,
-          });
-          if (!result.success) {
-            toast.error(`Failed to save ${file.name}`);
-          }
+        const saved = await confirmDocumentUpload({
+          patientId,
+          appointmentId,
+          isSessionNote,
+          key: urlResult.key,
+          name: file.name,
+          fileType: file.type,
+          fileSize: file.size,
         });
+        if (!saved.success) {
+          toast.error(`Failed to save ${file.name}`);
+          continue;
+        }
+        uploaded.push(file);
       }
       setUploading(false);
 
@@ -111,7 +117,7 @@ export function DocumentUploader({ patientId, appointmentId }: DocumentUploaderP
         ) : (
           <Upload className="mr-2 h-4 w-4" />
         )}
-        {uploading ? "Uploading…" : "Upload document"}
+        {uploading ? "Uploading…" : label}
       </Button>
     </>
   );

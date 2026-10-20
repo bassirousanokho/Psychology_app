@@ -73,7 +73,7 @@ export function PendingTasks({ appointments }: PendingTasksProps) {
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-8 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                className="h-8 text-xs [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
                 render={<Link href={`/dashboard/appointments/${appt.id}`} />}
               >
                 Write notes

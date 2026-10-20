@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
-import { format } from "date-fns";
+import { differenceInMinutes, format } from "date-fns";
+import { formatDuration, isHourly, SESSION_TYPE_INVOICE_LABELS } from "@/lib/session-types";
 import prisma from "@/lib/prisma";
 import { PrintButton } from "@/components/billing/print-button";
 
@@ -15,7 +16,9 @@ export default async function PublicInvoicePage({ params }: PageProps) {
     include: {
       patient: { select: { firstName: true, lastName: true, email: true } },
       workspace: { select: { name: true, currency: true } },
-      appointment: { select: { startTime: true } },
+      appointment: {
+        select: { startTime: true, endTime: true, type: true, status: true, cancellationFee: true },
+      },
     },
   });
 
@@ -27,6 +30,20 @@ export default async function PublicInvoicePage({ params }: PageProps) {
   const totalAmount = Number(invoice.totalAmount);
   const taxRate = Number(invoice.taxRate);
   const cur = workspace.currency;
+  const isReceipt = invoice.status === "PAID" && invoice.paidAt !== null;
+
+  let lineDescription = "Therapy session";
+  if (appointment) {
+    const date = format(appointment.startTime, "d MMMM yyyy");
+    const minutes = differenceInMinutes(appointment.endTime, appointment.startTime);
+    if (appointment.status === "CANCELLED" && appointment.cancellationFee) {
+      lineDescription = `Cancellation fee — session of ${date}`;
+    } else if (isHourly(appointment.type)) {
+      lineDescription = `${SESSION_TYPE_INVOICE_LABELS[appointment.type]} — ${date} (${formatDuration(minutes)})`;
+    } else {
+      lineDescription = `${SESSION_TYPE_INVOICE_LABELS[appointment.type]} — ${date}`;
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4">
@@ -38,7 +55,9 @@ export default async function PublicInvoicePage({ params }: PageProps) {
             <h1 className="text-2xl font-bold text-gray-900">{workspace.name}</h1>
           </div>
           <div className="text-right">
-            <p className="text-xs text-gray-400 uppercase tracking-widest">Invoice</p>
+            <p className="text-xs text-gray-400 uppercase tracking-widest">
+              {isReceipt ? "Receipt" : "Invoice"}
+            </p>
             <p className="text-lg font-mono font-semibold">{invoice.invoiceNumber}</p>
           </div>
         </div>
@@ -82,10 +101,7 @@ export default async function PublicInvoicePage({ params }: PageProps) {
           </thead>
           <tbody>
             <tr className="border-b">
-              <td className="py-3 text-gray-900">
-                Therapy session
-                {appointment && ` — ${format(appointment.startTime, "d MMMM yyyy")}`}
-              </td>
+              <td className="py-3 text-gray-900">{lineDescription}</td>
               <td className="py-3 text-right tabular-nums">
                 {amount.toFixed(2)} {cur}
               </td>
@@ -95,7 +111,7 @@ export default async function PublicInvoicePage({ params }: PageProps) {
             {taxRate > 0 && (
               <tr>
                 <td className="pt-3 text-right text-gray-400 pr-8" colSpan={1}>
-                  Tax ({taxRate.toFixed(0)}%)
+                  Tax ({taxRate.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} %)
                 </td>
                 <td className="pt-3 text-right tabular-nums text-gray-400">
                   {taxAmount.toFixed(2)} {cur}

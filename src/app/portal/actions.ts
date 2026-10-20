@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import prisma from "@/lib/prisma";
 import { requirePatientAuth } from "@/lib/patient-auth";
+import { psychotherapyRate } from "@/lib/rates";
 
 const SESSION_DURATION_MIN = 60;
 
@@ -35,6 +36,7 @@ export async function bookAppointment(input: {
   const conflict = await prisma.appointment.findFirst({
     where: {
       workspaceId,
+      type: "PSYCHOTHERAPY",
       status: { in: ["SCHEDULED", "COMPLETED"] },
       OR: [
         { startTime: { lt: endTime }, endTime: { gt: startTime } },
@@ -58,7 +60,7 @@ export async function bookAppointment(input: {
       startTime,
       endTime,
       status: "SCHEDULED",
-      tariffAmount: workspace.defaultTariff,
+      tariffAmount: await psychotherapyRate(patientId, startTime),
       taxRate: workspace.taxRate,
     },
   });
@@ -77,6 +79,7 @@ export async function getBookedHours(
   const appts = await prisma.appointment.findMany({
     where: {
       workspaceId,
+      type: "PSYCHOTHERAPY",
       status: { in: ["SCHEDULED", "COMPLETED"] },
       startTime: { gte: dayStart, lte: dayEnd },
     },

@@ -69,3 +69,37 @@ export async function sendInvoiceReminder(opts: SendInvoiceReminderOptions) {
     html,
   });
 }
+
+interface SendReceiptOptions {
+  to: string;
+  patientName: string;
+  practiceName: string;
+  invoiceNumber: string;
+  totalAmount: string;
+  currency: string;
+  paidOn: string;
+  publicUrl: string;
+}
+
+/** Receipt (quittance) for a paid invoice. */
+export async function sendReceiptEmail(opts: SendReceiptOptions) {
+  const html = `
+    <p>Dear ${opts.patientName},</p>
+    <p>We confirm receipt of your payment of <strong>${opts.totalAmount} ${opts.currency}</strong>
+    on ${opts.paidOn} for invoice <strong>${opts.invoiceNumber}</strong>.</p>
+    <p><a href="${opts.publicUrl}">View and print your receipt</a></p>
+    <p>${opts.practiceName}</p>
+  `;
+
+  if (!resend) {
+    console.log("[email] receipt →", opts.to, opts.publicUrl);
+    return;
+  }
+
+  await resend.emails.send({
+    from: process.env.RESEND_FROM_EMAIL ?? "invoices@yourdomain.com",
+    to: opts.to,
+    subject: `Receipt — Invoice ${opts.invoiceNumber}`,
+    html,
+  });
+}

@@ -32,24 +32,38 @@ export default async function CalendarPage({ searchParams }: CalendarPageProps) 
       },
       include: {
         patient: { select: { firstName: true, lastName: true } },
+        invoice: { select: { id: true } },
       },
       orderBy: { startTime: "asc" },
     }),
     prisma.patient.findMany({
-      where: { workspaceId: userId },
+      where: { workspaceId: userId, deletedAt: null },
       select: { id: true, firstName: true, lastName: true },
       orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
     }),
     prisma.workspace.findUnique({
       where: { id: userId },
-      select: { workingDays: true, workingHoursStart: true, workingHoursEnd: true },
+      select: {
+        workingDays: true,
+        workingHoursStart: true,
+        workingHoursEnd: true,
+        hourlyRateAdmin: true,
+        hourlyRateWriting: true,
+        currency: true,
+        cancellationNoticeHours: true,
+      },
     }),
   ]);
 
-  const availability: Availability = workspace ?? {
-    workingDays: [1, 2, 3, 4, 5],
-    workingHoursStart: "09:00",
-    workingHoursEnd: "18:00",
+  const availability: Availability = {
+    workingDays: workspace?.workingDays ?? [1, 2, 3, 4, 5],
+    workingHoursStart: workspace?.workingHoursStart ?? "09:00",
+    workingHoursEnd: workspace?.workingHoursEnd ?? "18:00",
+    hourlyRates: {
+      ADMIN: Number(workspace?.hourlyRateAdmin ?? 0),
+      WRITING: Number(workspace?.hourlyRateWriting ?? 0),
+    },
+    currency: workspace?.currency ?? "EUR",
   };
 
   // Serialize Dates → ISO strings before passing to Client Components
@@ -58,6 +72,9 @@ export default async function CalendarPage({ searchParams }: CalendarPageProps) 
     startTime: a.startTime.toISOString(),
     endTime: a.endTime.toISOString(),
     status: a.status,
+    type: a.type,
+    price: Number(a.tariffAmount),
+    invoiced: a.invoice !== null,
     patient: a.patient,
   }));
 
@@ -81,6 +98,7 @@ export default async function CalendarPage({ searchParams }: CalendarPageProps) 
           appointments={appointments}
           patients={patients}
           availability={availability}
+          cancellationNoticeHours={workspace?.cancellationNoticeHours ?? 48}
           currentWeekISO={weekISO}
         />
       </main>

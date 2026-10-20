@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, type UseFormRegisterReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
@@ -10,9 +10,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { updateSettings, exportPatientData, type SettingsFormData } from "@/app/(dashboard)/dashboard/settings/actions";
+import { ChangeRateDialog } from "./change-rate-dialog";
 
 const schema = z.object({
-  defaultTariff: z.number().min(0),
+  hourlyRateAdmin: z.number({ message: "Enter an amount" }).min(0, "Must be 0 or greater"),
+  hourlyRateWriting: z.number({ message: "Enter an amount" }).min(0, "Must be 0 or greater"),
+  cancellationNoticeHours: z.number({ message: "Enter a number" }).int().min(0).max(720, "At most 30 days"),
+  cancellationAlertThreshold: z.number({ message: "Enter a number" }).int().min(1, "At least 1").max(50),
+  retentionYears: z.number({ message: "Enter a number" }).int().min(1, "At least 1 year").max(50),
   taxRate: z.number().min(0).max(100),
   currency: z.string().min(1),
   workingHoursStart: z.string().regex(/^\d{2}:\d{2}$/),
@@ -39,9 +44,10 @@ const CURRENCIES = ["EUR", "USD", "GBP", "CHF", "CAD"];
 
 interface SettingsFormProps {
   defaults: SettingsFormData;
+  practiceRate: number;
 }
 
-export function SettingsForm({ defaults }: SettingsFormProps) {
+export function SettingsForm({ defaults, practiceRate }: SettingsFormProps) {
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
 
@@ -102,20 +108,39 @@ export function SettingsForm({ defaults }: SettingsFormProps) {
       <section className="rounded-xl border bg-card p-6 space-y-5">
         <h2 className="font-semibold text-base">Billing defaults</h2>
 
-        <div className="grid gap-4 sm:grid-cols-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="defaultTariff">Session tariff</Label>
-            <Input
-              id="defaultTariff"
-              type="number"
-              step="0.01"
-              min="0"
-              {...register("defaultTariff", { valueAsNumber: true })}
-            />
-            {errors.defaultTariff && (
-              <p className="text-xs text-destructive">{errors.defaultTariff.message}</p>
-            )}
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-muted/40 px-4 py-3">
+          <div>
+            <p className="text-sm font-medium">Psychotherapy session rate</p>
+            <p className="text-xs text-muted-foreground">
+              Practice rate for new patients. Patients can have their own rate (patient file).
+            </p>
           </div>
+          <div className="flex items-center gap-3">
+            <span className="text-lg font-semibold tabular-nums">
+              {practiceRate.toFixed(2)} {watch("currency")}
+            </span>
+            <ChangeRateDialog currentRate={practiceRate} currency={watch("currency")} />
+          </div>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <NumberField
+            id="hourlyRateAdmin"
+            label="Administrative work (per hour)"
+            step="0.01"
+            register={register("hourlyRateAdmin", { valueAsNumber: true })}
+            error={errors.hourlyRateAdmin?.message}
+          />
+          <NumberField
+            id="hourlyRateWriting"
+            label="Report writing (per hour)"
+            step="0.01"
+            register={register("hourlyRateWriting", { valueAsNumber: true })}
+            error={errors.hourlyRateWriting?.message}
+          />
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-3">
 
           <div className="space-y-1.5">
             <Label htmlFor="taxRate">Tax rate (%)</Label>
@@ -200,6 +225,39 @@ export function SettingsForm({ defaults }: SettingsFormProps) {
         </div>
       </section>
 
+      {/* Cancellations */}
+      <section className="rounded-xl border bg-card p-6 space-y-5">
+        <h2 className="font-semibold text-base">Cancellations</h2>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <NumberField
+            id="cancellationNoticeHours"
+            label="Notice period (hours)"
+            hint="Shown when cancelling; you decide whether a fee applies."
+            register={register("cancellationNoticeHours", { valueAsNumber: true })}
+            error={errors.cancellationNoticeHours?.message}
+          />
+          <NumberField
+            id="cancellationAlertThreshold"
+            label="Alert from (cancellations / 30 days)"
+            hint="A patient reaching this many cancellations in 30 days is flagged."
+            register={register("cancellationAlertThreshold", { valueAsNumber: true })}
+            error={errors.cancellationAlertThreshold?.message}
+          />
+        </div>
+      </section>
+
+      {/* Data retention */}
+      <section className="rounded-xl border bg-card p-6 space-y-5">
+        <h2 className="font-semibold text-base">Data retention</h2>
+        <NumberField
+          id="retentionYears"
+          label="Remind me to review patients after (years)"
+          hint="Patients with no session for this long, and patients in Recently deleted for this long, appear in your reminders."
+          register={register("retentionYears", { valueAsNumber: true })}
+          error={errors.retentionYears?.message}
+        />
+      </section>
+
       <div className="flex items-center justify-between">
         <div>
           <Button
@@ -226,5 +284,30 @@ export function SettingsForm({ defaults }: SettingsFormProps) {
         </Button>
       </div>
     </form>
+  );
+}
+
+function NumberField({
+  id,
+  label,
+  hint,
+  step = "1",
+  register,
+  error,
+}: {
+  id: string;
+  label: string;
+  hint?: string;
+  step?: string;
+  register: UseFormRegisterReturn;
+  error?: string;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={id}>{label}</Label>
+      <Input id={id} type="number" step={step} min="0" {...register} />
+      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+      {error && <p className="text-xs text-destructive">{error}</p>}
+    </div>
   );
 }

@@ -3,6 +3,7 @@ import { format } from "date-fns";
 import { CalendarPlus } from "lucide-react";
 import { requirePatientAuth } from "@/lib/patient-auth";
 import prisma from "@/lib/prisma";
+import { SESSION_TYPE_LABELS } from "@/lib/session-types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
@@ -34,6 +35,7 @@ export default async function PortalAppointmentsPage() {
       startTime: true,
       endTime: true,
       status: true,
+      type: true,
       tariffAmount: true,
       invoice: { select: { publicToken: true, status: true } },
     },
@@ -69,6 +71,11 @@ export default async function PortalAppointmentsPage() {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium">
                     {format(appt.startTime, "EEEE d MMMM yyyy")}
+                    {appt.type !== "PSYCHOTHERAPY" && (
+                      <span className="ml-2 text-xs font-normal text-muted-foreground">
+                        {SESSION_TYPE_LABELS[appt.type]}
+                      </span>
+                    )}
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {format(appt.startTime, "HH:mm")} – {format(appt.endTime, "HH:mm")} ·{" "}

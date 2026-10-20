@@ -22,7 +22,7 @@ export async function createUploadUrl(input: {
   const { orgId } = await requireAuth();
 
   const patient = await prisma.patient.findFirst({
-    where: { id: input.patientId, workspaceId: orgId },
+    where: { id: input.patientId, workspaceId: orgId, deletedAt: null },
     select: { id: true },
   });
   if (!patient) return { success: false, error: "Patient not found" };
@@ -44,6 +44,7 @@ export async function createUploadUrl(input: {
 export async function confirmDocumentUpload(input: {
   patientId: string;
   appointmentId?: string;
+  isSessionNote?: boolean;
   key: string;
   name: string;
   fileType: string;
@@ -52,16 +53,29 @@ export async function confirmDocumentUpload(input: {
   const { orgId, userId } = await requireAuth();
 
   const patient = await prisma.patient.findFirst({
-    where: { id: input.patientId, workspaceId: orgId },
+    where: { id: input.patientId, workspaceId: orgId, deletedAt: null },
     select: { id: true },
   });
   if (!patient) return { success: false, error: "Patient not found" };
+
+  if (input.appointmentId) {
+    const appt = await prisma.appointment.findFirst({
+      where: { id: input.appointmentId, workspaceId: orgId, patientId: input.patientId },
+      select: { id: true },
+    });
+    if (!appt) return { success: false, error: "Session not found" };
+  }
+  // The object key must be one we issued for this workspace and patient
+  if (!input.key.startsWith(`documents/${orgId}/${input.patientId}/`)) {
+    return { success: false, error: "Invalid upload" };
+  }
 
   const doc = await prisma.document.create({
     data: {
       workspaceId: orgId,
       patientId: input.patientId,
       appointmentId: input.appointmentId ?? null,
+      isSessionNote: input.isSessionNote ?? false,
       uploadedById: userId,
       name: input.name,
       fileKey: input.key,
@@ -80,6 +94,7 @@ export async function confirmDocumentUpload(input: {
   });
 
   revalidatePath(`/dashboard/patients/${input.patientId}`);
+  if (input.appointmentId) revalidatePath(`/dashboard/appointments/${input.appointmentId}`);
   return { success: true, documentId: doc.id };
 }
 
@@ -88,8 +103,9 @@ export async function confirmDocumentUpload(input: {
 export async function toggleShareDocument(documentId: string, shared: boolean) {
   const { orgId } = await requireAuth();
 
+  // Uploaded session notes stay private to the practitioner
   const result = await prisma.document.updateMany({
-    where: { id: documentId, workspaceId: orgId },
+    where: { id: documentId, workspaceId: orgId, isSessionNote: false },
     data: { sharedWithPatient: shared },
   });
 
@@ -106,7 +122,7 @@ export async function deleteDocument(documentId: string) {
 
   const doc = await prisma.document.findFirst({
     where: { id: documentId, workspaceId: orgId },
-    select: { fileKey: true, patientId: true },
+    select: { fileKey: true, patientId: true, appointmentId: true },
   });
   if (!doc) return { success: false, error: "Document not found" };
 
@@ -128,6 +144,7 @@ export async function deleteDocument(documentId: string) {
   });
 
   revalidatePath(`/dashboard/patients/${doc.patientId}`);
+  if (doc.appointmentId) revalidatePath(`/dashboard/appointments/${doc.appointmentId}`);
   return { success: true };
 }
 
@@ -137,7 +154,7 @@ export async function sendPortalInviteAction(patientId: string) {
   const { orgId, userId } = await requireAuth();
 
   const patient = await prisma.patient.findFirst({
-    where: { id: patientId, workspaceId: orgId },
+    where: { id: patientId, workspaceId: orgId, deletedAt: null },
     select: { id: true, email: true, firstName: true, lastName: true, portalUser: true },
   });
   if (!patient) return { success: false, error: "Patient not found" };

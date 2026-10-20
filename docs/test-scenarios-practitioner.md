@@ -102,8 +102,8 @@ Go to **Settings**.
 - [X] Toggling working days on/off highlights/unhighlights each button; saving persists the selection.
 - [ ] ⚠️ **Do not save with zero working days on a shared environment** without a patient-portal session ready to observe: the portal booking page loops forever looking for working days. If you test it, open `/portal/book` as the invited patient (§5) and confirm whether the page hangs, then restore Mon–Fri immediately. comment : seems to save anyway
 - [X] Saturday-only or 7-day weeks save correctly.
-- [ ] **Retest (fixed):** deselecting every working day shows "Select at least one working day" and Save is refused.
-- [ ] **Retest (fixed):** day end before day start (18:00 → 09:00) shows "Day must end after it starts" under "Day ends at" and Save is refused.
+- [x] **Retest (fixed):** deselecting every working day shows "Select at least one working day" and Save is refused.
+- [x] **Retest (fixed):** day end before day start (18:00 → 09:00) shows "Day must end after it starts" under "Day ends at" and Save is refused.
 
 ### 2.4 Currency
 
@@ -136,9 +136,9 @@ Go to **Patients**.
 1. Create `Jean Martin` with email (use your **patient email**), phone `+33 6 12 34 56 78`, background notes spanning several lines.
 
 - [x] Saved; email shows as a clickable `mailto:` link. 
-- [ ] Multi-line background notes keep their line breaks on the profile page. comment : This page couldn’t load
+- [x] Multi-line background notes keep their line breaks on the profile page. comment : This page couldn’t load
 Reload to try again, or go back. when i try modify patient background details. I do not see the profile page either. 
-- [ ] **Retest (fixed: the row menu crashed on open):** row menu (⋯) opens; **View profile** and **Edit** both work.
+- [X] **Retest (fixed: the row menu crashed on open):** row menu (⋯) opens; **View profile** and **Edit** both work.
 
 ### 3.3 Form validation
 
@@ -148,9 +148,9 @@ Reload to try again, or go back. when i try modify patient background details. I
 - [x] Double-clicking **Save patient** quickly creates only one patient.
 - [x] Names with accents, apostrophes and hyphens (`Éloïse O'Brien-Lefèvre`) save and display correctly.
 - [x] Very long name (80+ chars) doesn't break the table layout.
-- [ ] Note: there is no date-of-birth field, although the database has one. comment: let's add it (not mandatory) + Male / female /other / pronouns
-- [ ] **Retest (added):** optional Date of birth, Gender (—, Female, Male, Other) and Pronouns fields. A future date of birth is refused. The profile shows "12 May 1990 (36 y/o)" and "Female · elle"; editing pre-fills them; the GDPR export includes them.
-- [ ] **Retest (added):** phone is normalised on save: `0612345678`, `06 12 34 56 78` and `+33612345678` all become `+33 6 12 34 56 78`; `+41 79 123 45 67` stays Swiss; `12345` → "Invalid phone number".
+- [x] Note: there is no date-of-birth field, although the database has one. comment: let's add it (not mandatory) + Male / female /other / pronouns
+- [x] **Retest (added):** optional Date of birth, Gender (—, Female, Male, Other) and Pronouns fields. A future date of birth is refused. The profile shows "12 May 1990 (36 y/o)" and "Female · elle"; editing pre-fills them; the GDPR export includes them.
+- [x] **Retest (added):** phone is normalised on save: `0612345678`, `06 12 34 56 78` and `+33612345678` all become `+33 6 12 34 56 78`; `+41 79 123 45 67` stays Swiss; `12345` → "Invalid phone number".
 
 ### 3.4 Create a set of test patients
 
@@ -159,31 +159,31 @@ Create at least 6 patients in total (useful for search, sorting and the booking 
 COMMENT : phone number in patients page is not normalized (sometimes spaces others not)
 ### 3.5 Search and sort
 
-- [ ] Search by last name, by first name, by part of an email, by phone digits: matching rows only. Comment : failes email + phones
-- [ ] Search is case-insensitive and ignores leading/trailing spaces. Comment fails leading space
+- [x] Search by last name, by first name, by part of an email, by phone digits: matching rows only. Comment : failes email + phones
+- [x] Search is case-insensitive and ignores leading/trailing spaces. Comment fails leading space
 - [x] No match → "No patients match your search."; footer counter updates.
-- [ ] Clicking **Name**, **Email**, **Phone**, **Patient since** headers sorts ascending then descending. Comment : sorting is weird (does not alwway work, check)
-- [ ] ⚠️ The search box in the top header bar ("Search patients…") does nothing. Only the search above the table works. The bell icon also does nothing. Comment remove it or make it visible in all pages.
-- [ ] **Retest (fixed):** search finds email fragments and phone digits in any format (`0612`, `06 12 34`, `+33 6 12`), ignores accents, case and surrounding spaces, and matches "jean martin" or "martin jean".
-- [ ] **Retest (fixed):** list starts sorted by name; headers show ↑/↓ and toggle between ascending and descending; accents sort naturally (Éloïse between Dupont and Martin); empty emails/phones always last.
-- [ ] **Retest (changed):** the header search works on every dashboard page: type and press Enter → patients list filtered by that query. The bell is gone.
+- [x] Clicking **Name**, **Email**, **Phone**, **Patient since** headers sorts ascending then descending. Comment : sorting is weird (does not alwway work, check)
+- [x] ⚠️ The search box in the top header bar ("Search patients…") does nothing. Only the search above the table works. The bell icon also does nothing. Comment remove it or make it visible in all pages.
+- [x] **Retest (fixed):** search finds email fragments and phone digits in any format (`0612`, `06 12 34`, `+33 6 12`), ignores accents, case and surrounding spaces, and matches "jean martin" or "martin jean".
+- [x] **Retest (fixed):** list starts sorted by name; headers show ↑/↓ and toggle between ascending and descending; accents sort naturally (Éloïse between Dupont and Martin); empty emails/phones always last.
+- [x] **Retest (changed):** the header search works on every dashboard page: type and press Enter → patients list filtered by that query. The bell is gone.
 
 ### 3.6 Edit a patient
 
 1. Row menu (⋯) → **Edit**. Change phone and background notes. Save.
 
-- [ ] Form is pre-filled with the current values.
-- [ ] Toast "Patient updated"; table reflects the change.
-- [ ] Clearing the email field and saving removes the email (shows "—").
+- [x] Form is pre-filled with the current values.
+- [x] Toast "Patient updated"; table reflects the change.
+- [x] Clearing the email field and saving removes the email (shows "—").
 
 ### 3.7 View profile
 
 1. Row menu → **View profile**.
 
-- [ ] Shows name, email, phone, "Patient since <Month Year>", background notes, Documents section, Session history ("No sessions yet").
-- [ ] **Back to patients** returns to the list.
-- [ ] DB check: an `AuditLog` row `VIEW_PATIENT_NOTES` / `Patient` is written.
-- [ ] A made-up URL `/dashboard/patients/doesnotexist` shows a 404 page, not a crash.
+- [x] Shows name, email, phone, "Patient since <Month Year>", background notes, Documents section, Session history ("No sessions yet").
+- [x] **Back to patients** returns to the list.
+- [x] DB check: an `AuditLog` row `VIEW_PATIENT_NOTES` / `Patient` is written.
+- [x] A made-up URL `/dashboard/patients/doesnotexist` shows a 404 page, not a crash.
 
 ### 3.8 Delete a patient
 
@@ -191,8 +191,14 @@ Do this on a throwaway patient first, then repeat later (§11.3) on a patient wh
 
 1. Row menu → **Delete** → confirm dialog shows the patient's name → **Delete**.
 
-- [ ] Cancel in the dialog keeps the patient.
-- [ ] Confirm: toast "Patient deleted", row disappears.
+- [x] Cancel in the dialog keeps the patient.
+- [x] Confirm: toast "Patient deleted", row disappears.
+COMMENT: MAKE SURE IT IS NOT EXACTLY DELETED FROM THE DB but migrated until cleared.
+- [ ] **Retest (changed: soft delete):** Delete moves the patient to **Recently deleted (n)** (link next to "New patient"). They disappear from the list, the booking combobox and the patient count; their upcoming sessions become Cancelled; past sessions and invoices stay. DB: `Patient.deletedAt` set, row still present.
+- [ ] Opening a deleted patient's profile shows the "This patient was deleted on …" banner, history read-only, no upload/invite buttons.
+- [ ] **Restore** brings the patient back to the list (cancelled sessions stay cancelled).
+- [ ] **Delete permanently** asks for confirmation, then erases the patient, sessions, notes and documents (GCS files removed too). Disabled with a tooltip when the patient has invoices (kept 10 years).
+- [ ] A deleted patient with portal access lands on "no access" in the portal; their pending invite link shows "Invalid invitation".
 
 ---
 
@@ -204,49 +210,52 @@ Open **Jean Martin**'s profile.
 
 1. Click **Upload document**, pick the small PDF.
 
-- [ ] Button shows "Uploading…" with spinner, then toast "Document uploaded".
-- [ ] ⚠️ The new document may **not appear in the list until you reload the page** (the list keeps its initial state). Note whether it appears on its own.
-- [ ] After reload: name, size (KB/MB), today's date, PDF icon.
-- [ ] DB check: `Document` row with `fileKey = documents/<workspaceId>/<patientId>/<uuid>-<name>`; `AuditLog` row `UPLOAD_DOCUMENT`.
+- [x] Button shows "Uploading…" with spinner, then toast "Document uploaded".
+- [ ] ⚠️ The new document may **not appear in the list until you reload the page** (the list keeps its initial state). Note whether it appears on its own. COmment it does not appear.
+- [ ] **Retest (fixed):** the new document appears in the list right after upload, without reloading; the success toast only shows once it's saved.
+- [x] After reload: name, size (KB/MB), today's date, PDF icon.
+- [x] DB check: `Document` row with `fileKey = documents/<workspaceId>/<patientId>/<uuid>-<name>`; `AuditLog` row `UPLOAD_DOCUMENT`.
 - [ ] GCS check: object exists in the bucket at that key.
 
 If the upload fails with "Failed to upload …", open the browser console: a CORS error means the bucket CORS rule is missing or doesn't list this origin.
 
 ### 4.2 Other file types and sizes
 
-- [ ] JPG/PNG < 1 MB: uploads, image icon.
-- [ ] `.webp`: uploads.
-- [ ] 15 MB PDF: uploads.
-- [ ] 17 MB PDF: rejected client-side ("exceeds the 16 MB limit"), nothing uploaded.
-- [ ] 9 MB image: rejected ("Image exceeds 8 MB limit").
-- [ ] `.docx`: cannot be selected in the file picker. If forced (drag/drop or "All files"), rejected with "Unsupported file type".
-- [ ] `.heic` (iPhone photo): note behaviour. Likely rejected by the picker filter, which is a usability gap for phone uploads.
-- [ ] File with accents/spaces in its name: uploads, displays the original name, opens correctly.
-- [ ] Select 3 files at once: all three upload; toast says "3 documents uploaded".
-- [ ] Upload the same file twice: two separate entries (no overwrite).
+- [x] JPG/PNG < 1 MB: uploads, image icon.
+- [x] `.webp`: uploads.
+- [x] 15 MB PDF: uploads.
+- [x] 17 MB PDF: rejected client-side ("exceeds the 16 MB limit"), nothing uploaded.
+- [x] 9 MB image: rejected ("Image exceeds 8 MB limit").
+- [x] `.docx`: cannot be selected in the file picker. If forced (drag/drop or "All files"), rejected with "Unsupported file type".
+- [x] `.heic` (iPhone photo): note behaviour. Likely rejected by the picker filter, which is a usability gap for phone uploads.
+- [x] File with accents/spaces in its name: uploads, displays the original name, opens correctly.
+- [x] Select 3 files at once: all three upload; toast says "3 documents uploaded".
+- [x] Upload the same file twice: two separate entries (no overwrite).
 
 ### 4.3 Open a document
 
-- [ ] Hover a row → **Open** icon opens the file in a new tab (signed GCS URL).
-- [ ] Leave the profile page open for more than 15 minutes, then click **Open**: ⚠️ link has expired (signed URLs last 15 min). Reloading the page fixes it.
-- [ ] Copy the document URL, sign out, paste it in a private window: works only until it expires (expected: signed URL).
-- [ ] Note: no `VIEW_DOCUMENT` audit entry is written when opening a document.
+- [x] Hover a row → **Open** icon opens the file in a new tab (signed GCS URL).
+- [X] Leave the profile page open for more than 15 minutes, then click **Open**: ⚠️ link has expired (signed URLs last 15 min). Reloading the page fixes it. Comment : Tell the user to reaload maybe? 
+- [ ] **Retest (fixed: links never expire):** leave the profile open > 15 min, click **Open**: the document still opens (each click gets a fresh link). DB: an `AuditLog` `VIEW_DOCUMENT` row is written per open.
+- [X] Copy the document URL, sign out, paste it in a private window: works only until it expires (expected: signed URL).
+- [X] Note: no `VIEW_DOCUMENT` audit entry is written when opening a document.
 
 ### 4.4 Share / unshare with patient
 
-- [ ] Hover → **Share with patient**: "Shared" label appears immediately.
-- [ ] Reload: still shared. DB: `sharedWithPatient = true`.
-- [ ] Click again (**Unshare**): label disappears; persists after reload.
+- [x] Hover → **Share with patient**: "Shared" label appears immediately.
+- [x] Reload: still shared. DB: `sharedWithPatient = true`.
+- [x] Click again (**Unshare**): label disappears; persists after reload.
 - [ ] After portal setup (§5), verify the patient sees shared documents only.
 
 ### 4.5 Delete a document
 
-- [ ] Hover → **Delete**: spinner, toast "Document deleted", row disappears. ⚠️ No confirmation dialog: one misclick deletes permanently.
-- [ ] DB: row gone, `AuditLog` `DELETE_DOCUMENT`. GCS: object gone.
+- [ ] Hover → **Delete**: spinner, toast "Document deleted", row disappears. ⚠️ No confirmation dialog: one misclick deletes permanently. Comment : add a confirmation.
+- [ ] **Retest (fixed):** Delete asks "Delete document?" (mentions the patient portal if shared); Cancel keeps it.
+- [X] DB: row gone, `AuditLog` `DELETE_DOCUMENT`. GCS: object gone.
 
 ### 4.6 Hover-only actions on touch devices
 
-- [ ] On a phone/tablet, check you can reach Open / Share / Delete. ⚠️ They only appear on hover, which may make them unreachable on touch screens.
+- [ ] On a phone/tablet, Open / Share / Delete are always visible (fixed: they were hover-only); with a mouse they appear on hover or keyboard focus.
 
 ---
 
@@ -262,10 +271,10 @@ If the upload fails with "Failed to upload …", open the browser console: a COR
 
 1. Open **Jean Martin** → **Invite to portal**.
 
-- [ ] Toast "Invitation sent to patient's email"; button becomes "Invitation sent".
-- [ ] Email received at the patient address, sender = `RESEND_FROM_EMAIL`, subject "<your name> invited you to your patient portal", button link = `<NEXT_PUBLIC_APP_URL>/portal/join/<token>`.
-- [ ] Without Resend configured: the invite URL is printed in the server logs instead.
-- [ ] Reload the profile: button is back to "Invite to portal" (no "pending invite" state is shown). Re-inviting invalidates the previous link.
+- [x] Toast "Invitation sent to patient's email"; button becomes "Invitation sent".
+- [X] Email received at the patient address, sender = `RESEND_FROM_EMAIL`, subject "<your name> invited you to your patient portal", button link = `<NEXT_PUBLIC_APP_URL>/portal/join/<token>`.
+- [X] Without Resend configured: the invite URL is printed in the server logs instead.
+- [X] Reload the profile: button is back to "Invite to portal" (no "pending invite" state is shown). Re-inviting invalidates the previous link.
 
 ### 5.3 Patient accepts (do this in a private window)
 
@@ -303,40 +312,48 @@ Go to **Calendar**.
 
 ### 6.1 Week view
 
-- [ ] Shows Monday→Sunday of the current week, today highlighted, month/year label.
-- [ ] Time grid runs 08:00 → 20:00.
-- [ ] **◀ / ▶** move one week; URL gets `?week=YYYY-MM-DD`; **Today** returns to the current week.
-- [ ] Navigating across a month/year boundary (e.g. late December) shows correct dates.
+- [x] Shows Monday→Sunday of the current week, today highlighted, month/year label.
+- [X] Time grid runs 08:00 → 20:00.
+- [X] **◀ / ▶** move one week; URL gets `?week=YYYY-MM-DD`; **Today** returns to the current week.
+- [X] Navigating across a month/year boundary (e.g. late December) shows correct dates.
 
 ### 6.2 Book via the button
 
 1. **Book appointment** → pick a patient → pick a date → pick a duration → click a free start time → **Book**.
 
-- [ ] Date defaults to today; duration defaults to 60 min (options 30, 45, 50, 60, 75, 90, 120).
-- [ ] Combobox search filters by name; "No patients found." for no match.
-- [ ] Only free start times are offered, in 15-minute steps, inside your working hours (Settings). A 60-min session can't start later than 1 h before the day ends.
-- [ ] Times that overlap an existing session are not offered (book 10:00–11:00, reopen: 09:15–10:45 are missing, 09:00 and 11:00 are offered).
-- [ ] For today, past times are not offered.
-- [ ] Changing the duration updates the list; a selected time that no longer fits is deselected and **Book** is disabled.
-- [ ] Changing the date shows "Checking availability…", then that day's free times.
-- [ ] Summary line shows "Wed 15 Oct · 10:00–11:00" before booking.
-- [ ] Clicking **Book** without a patient → "Please select a patient".
-- [ ] Success: toast "Appointment booked", dialog closes, block appears on the right day and time with patient name and times, status "Scheduled" (blue).
-- [ ] **Time zone:** book 14:00 and check it shows 14:00 on the calendar, the session page, the patient profile and (if invited) the patient portal.
-- [ ] Header counter "N appointments this week" updates.
+- [X] Date defaults to today; duration defaults to 60 min (options 30, 45, 50, 60, 75, 90, 120).
+- [x] Combobox search filters by name; "No patients found." for no match.
+- [x] Only free start times are offered, in 15-minute steps, inside your working hours (Settings). A 60-min session can't start later than 1 h before the day ends.
+- [x] Times that overlap an existing session are not offered (book 10:00–11:00, reopen: 09:15–10:45 are missing, 09:00 and 11:00 are offered).
+- [x] For today, past times are not offered.
+- [X] Changing the duration updates the list; a selected time that no longer fits is deselected and **Book** is disabled.
+- [X] Changing the date shows "Checking availability…", then that day's free times.
+- [X] Summary line shows "Wed 15 Oct · 10:00–11:00" before booking.
+- [X] Clicking **Book** without a patient → "Please select a patient".
+- [X] Success: toast "Appointment booked", dialog closes, block appears on the right day and time with patient name and times, status "Scheduled" (blue).
+- [X] **Time zone:** book 14:00 and check it shows 14:00 on the calendar, the session page, the patient profile and (if invited) the patient portal.
+- [X] Header counter "N appointments this week" updates.
 
 ### 6.3 Book by clicking a slot
 
 1. Click an empty hour cell (e.g. Wednesday 10:00).
 
-- [ ] Dialog opens with that date and 10:00 selected.
-- [ ] Close it and click another slot: the new date/time is pre-selected (not the previous one).
-- [ ] Clicking a slot outside working hours (e.g. 19:00) opens with "Show all times" switched on and 19:00 selected.
-- [ ] Clicking a slot that's already taken opens with no time selected.
+- [x] Dialog opens with that date and 10:00 selected.
+- [x] Close it and click another slot: the new date/time is pre-selected (not the previous one).
+- [x] Clicking a slot outside working hours (e.g. 19:00) opens with "Show all times" switched on and 19:00 selected.
+- [ ] Clicking a slot that's already taken opens with no time selected. Comment: cannot click on a slot that's taken. Add something the possibiliity to modify an appointment from the calendar.
+- [ ] **Retest (added):** clicking a session on the calendar opens its panel: patient, date, time, duration, status.
+- [ ] **Open session notes** goes to the session page.
+- [ ] **Reschedule** (scheduled only): same picker as booking, current date/duration/time pre-selected, its own slot counts as free; **Move session** updates the calendar; **Back** returns to the panel. Moving onto another session is refused.
+- [ ] **Cancel session** asks for confirmation; the block turns grey and struck through; the slot is offered again for booking.
+- [ ] **Mark as no-show** only appears once the session has started; block turns red and struck through.
+- [ ] **Restore as scheduled** on a cancelled/no-show session works if the slot is still free, otherwise says who took it.
+- [ ] **Delete (booked by mistake)** works for an empty session; refused with "Cancel it instead" if it has notes, an invoice or documents.
+- [ ] Completed sessions only offer **Open session notes** (changes go through Reopen on the session page).
 
 ### 6.4 Edge cases
 
-- [ ] Double booking is refused: open the dialog in two tabs, book the same time in both. The second shows "Overlaps with <patient>'s session" and refreshes the free times.
+- [x] Double booking is refused: open the dialog in two tabs, book the same time in both. The second shows "Overlaps with <patient>'s session" and refreshes the free times.
 - [ ] A cancelled or no-show session frees its slot (once cancelling exists, see 6.5).
 - [ ] "Show all times" offers 07:00–21:00 for out-of-hours sessions. ⚠️ Sessions before 08:00 or after 20:00 are drawn clamped to the top/bottom edge of the grid.
 - [ ] Book a 30-min, a 45-min and a 90-min session: block heights look proportional.
@@ -346,8 +363,7 @@ Go to **Calendar**.
 
 ### 6.5 Open / manage an appointment from the calendar
 
-- [ ] ⚠️ Clicking an appointment block **does nothing**: there is no way to open the session from the calendar. Workaround: Overview (today/missing notes) or patient profile → Session history.
-- [ ] ⚠️ There is no UI to **cancel**, mark **no-show**, **reschedule** or **delete** an appointment. Confirm and record as a gap.
+- [ ] Covered by the retest lines in §6.3 (session panel: open, reschedule, cancel, no-show, restore, delete).
 
 ### 6.6 Patient self-booking appears in the calendar
 
@@ -369,9 +385,9 @@ Create for today: one appointment **earlier today (already ended)**, one **later
 
 - [ ] **Today's Schedule** lists today's appointments in time order with status badge; cancelled ones are hidden.
 - [ ] Clicking the ➜ arrow opens the session page.
-- [ ] **Prep** button (scheduled only) opens "Pre-session prep" with background notes and the **previous session's notes**. ⚠️ Previous notes are stored encrypted and this dialog shows them without decrypting: check whether you see readable text or a string starting with `enc:`.
+- [ ] **Prep** button (scheduled only) opens "Pre-session prep" with background notes and the **previous session's notes** as readable text (fixed: they were shown encrypted, `enc:…`).
 - [ ] **Missing Notes** lists past sessions without completed notes, most recent first, with "ended X ago".
-- [ ] ⚠️ The "Write notes" button only appears on hover, so it can't be reached on touch devices.
+- [ ] On a phone/tablet the "Write notes" button is always visible (fixed: it was hover-only); with a mouse it appears on hover.
 - [ ] With more than 5 pending, a "View all" link appears and goes to the placeholder Clinical Notes page.
 - [ ] Banner text "N sessions still need notes." matches the count; sidebar **Clinical Notes** badge shows the same number.
 - [ ] Stats: Total patients, Sessions this month (completed only), Hours worked (completed only), Unpaid invoices (draft+sent+overdue), Revenue (paid this month), Missing notes.
@@ -405,7 +421,8 @@ Create for today: one appointment **earlier today (already ended)**, one **later
 ### 7.4 Reopen a session
 
 - [ ] **Reopen** → toast "Session reopened", editor editable again, status back to Scheduled.
-- [ ] ⚠️ If the session already has an invoice, reopening hides the invoice panel (only shown when Completed), and the session counts again as missing notes.
+- [ ] Reopening an **invoiced** session keeps it Completed and the invoice panel stays visible (fixed). It counts as missing notes until completed again.
+- [ ] Reopening a session **without** an invoice puts it back to Scheduled (so a session completed by mistake can be cancelled from the calendar).
 - [ ] Edit and complete again: new finalised timestamp.
 - [ ] DB: `AuditLog` `REOPEN_SESSION`.
 
@@ -425,7 +442,7 @@ On a **completed** session.
 1. Invoice panel → **Generate invoice**.
 
 - [ ] Toast "Invoice created".
-- [ ] ⚠️ The panel may keep showing "Generate invoice" until you reload. Clicking it again then gives "Invoice already exists". Note it.
+- [ ] The panel shows the new invoice immediately, without reloading (fixed).
 - [ ] After reload: invoice number `INV-<year>-0001`, total, status **Draft**, **View** button.
 - [ ] Amounts: tariff 70, tax 0 → total 70.00. Repeat with tax 5.5 % on a new session booked *after* changing the setting: amount 70.00, tax 3.85, total 73.85.
 
@@ -443,8 +460,8 @@ On a **completed** session.
 ### 8.3 Invoice numbering
 
 - [ ] Second invoice → `INV-<year>-0002`, etc.
-- [ ] ⚠️ Practitioner B's first invoice will also try to use `INV-<year>-0001`, which is already taken globally. Expect an error when B generates their first invoice (see §11.2).
-- [ ] ⚠️ After deleting a patient who had invoices (§11.3), the next generated number may collide with an existing one and fail.
+- [ ] Numbering is per practitioner: Practitioner B's first invoice is also `INV-<year>-0001` and generates without error (fixed, see §11.2).
+- [ ] Numbers never repeat or skip, including after deleting a patient (deleted patients keep their invoices).
 
 ### 8.4 Not allowed
 
@@ -520,7 +537,7 @@ Sign up **Practitioner B** in another browser/profile.
 
 - [ ] B's dashboard, patients, calendar, billing are empty.
 - [ ] Copy a patient profile URL, session URL and document link from A; open them as B → 404 for profile/session pages.
-- [ ] B creates a patient + completed session + invoice. ⚠️ Generating B's first invoice likely fails ("Failed"/server error) because invoice numbers are unique across all practitioners.
+- [ ] B creates a patient + completed session + invoice: B's first invoice is `INV-<year>-0001` and generates fine.
 - [ ] A still sees only A's data afterwards.
 
 ### 11.3 Delete a patient with history
@@ -531,7 +548,7 @@ Delete a patient who has appointments, notes, documents and invoices.
 - [ ] Patient, appointments and documents disappear from every page (calendar, overview, billing).
 - [ ] ⚠️ **Invoices are deleted too.** Revenue and billing history change retroactively, which is a problem for accounting. Record it.
 - [ ] ⚠️ GCS: the patient's files are **not** deleted from the bucket (orphaned objects containing health data).
-- [ ] Generate a new invoice for another patient afterwards: ⚠️ check for an invoice-number collision.
+- [ ] Generate a new invoice for another patient afterwards: next number in sequence, no error.
 
 ### 11.4 Audit trail
 
@@ -588,6 +605,79 @@ Run once on the deployed (UTC) environment from a browser in Europe/Paris:
 
 ---
 
+## 13. Practice features (batch of 2026-10-20)
+
+### 13.1 Patient file: emergency contact, family doctor
+
+- [ ] New/edit patient form has **Emergency contact** (full name, relationship, phone) and **Family doctor** (full name, phone), all optional. Phones are normalised like the patient's (`0612345678` → `+33 6 12 34 56 78`); an invalid phone is refused.
+- [ ] Profile shows both cards; phone numbers are clickable (`tel:`). Cards are hidden when nothing is filled in.
+- [ ] GDPR export includes `emergencyContact` and `familyDoctor`.
+
+### 13.2 Rates per patient and rate changes
+
+- [ ] Patient form: **Individual session rate**, empty = practice rate (placeholder shows it). Booking a therapy session uses the individual rate.
+- [ ] Settings → **Change rate…**: patients on the practice rate are pre-selected, each with their current rate; All/None links work; date defaults to the 1st of next month.
+- [ ] Confirm: the practice rate changes for **new** patients; selected patients get the new rate from the date; **unselected patients keep their current rate** (even if they were on the practice rate).
+- [ ] Book a session for a selected patient before the date → old price; on/after the date → new price. A session booked **before** the change keeps its old price.
+- [ ] Profile → **Session rate** card: today's rate, the change (old → new, date), "Patient not informed yet"; **Schedule rate change** (amount + date) works per patient; an upcoming change can be cancelled (✕).
+- [ ] Overview → **Reminders** → "Rate changes to announce" lists each uninformed change (red "since …" once the date has passed); **Mark informed** removes it there and shows "Patient informed" on the profile.
+
+### 13.3 Session types and hourly work
+
+- [ ] Settings: **Administrative work** and **Report writing** hourly rates save.
+- [ ] Booking dialog: type selector (Psychotherapy / Administrative work / Report writing). For hourly types: "Time spent" in 30-min steps (30 min … 8 h), the summary shows the price (rate × time), all start times are offered (including over other sessions and in the past).
+- [ ] Hourly work can overlap a therapy session and other hourly work; a therapy session still can't overlap another therapy session (but can overlap hourly work).
+- [ ] Calendar: violet = admin, amber = writing, blue = psychotherapy (legend in the toolbar); overlapping items sit side by side.
+- [ ] Session page of hourly work: type and hourly rate shown; **Time spent** selector changes the end time and price until invoiced; **Mark as completed** works without typed notes.
+- [ ] Hourly work doesn't appear in "Missing notes" or the sidebar badge.
+- [ ] Invoice line: "Administrative work — 20 October 2026 (1 h 30)".
+- [ ] Patient portal: hourly items show their type; patient self-booking is never blocked by hourly work.
+
+### 13.4 Drag and drop in the calendar
+
+- [ ] Drag a scheduled session to another time/day: a dashed preview with the start time follows (15-min snap); on drop it moves ("Moved to …") and stays after reload.
+- [ ] Dropping a therapy session onto another therapy session is refused ("Overlaps with …") and the block jumps back.
+- [ ] Hourly work can be dropped anywhere, including over sessions; completed (uninvoiced) hourly work can also be moved.
+- [ ] Completed therapy sessions, cancelled sessions and invoiced items can't be dragged (normal cursor); clicking still opens the panel.
+- [ ] Dropping outside the grid cancels the drag (no leftover preview).
+
+### 13.5 Cancellations: fee, tracking, alerts
+
+- [ ] Session panel → **Cancel session**: shows how long before the session it is and your notice period ("inside the notice period" when relevant); **Charge a cancellation fee** is ticked by default with the session price, editable; unticking cancels without fee.
+- [ ] Cancelled with fee: session page shows "Cancelled on … · cancellation fee 70.00 EUR" and the invoice panel; the invoice line reads "Cancellation fee — session of …".
+- [ ] Cancelled without fee: "· no fee", no invoice panel.
+- [ ] Hourly work cancels without a fee option.
+- [ ] Settings → **Cancellations**: notice period (hours) and alert threshold (per 30 days) save.
+- [ ] Profile → **Cancellations**: last 30 days, this month, last 12 months (with fee count), no-shows, and a by-month list. Session history shows "cancellation fee …" / "cancelled without fee".
+- [ ] Cancel N sessions for one patient (N = threshold): the profile card turns amber with "N in the last 30 days", and Overview → Reminders → "Frequent cancellations" lists the patient.
+- [ ] **Restore as scheduled** clears the cancellation (no longer counted).
+
+### 13.6 Payment at the session, receipts
+
+- [ ] New invoices are due on the **session date**.
+- [ ] Session page → **Invoice & payment**: **Mark as paid** works with or without an existing invoice (creates it, status Paid, nothing sent); **Generate invoice** still creates a draft.
+- [ ] Billing: **Paid** is available on drafts too.
+- [ ] Paid invoice: **Send receipt** emails the patient (or logs the link without Resend); "Receipt sent …" appears; the button becomes "Send receipt again". Disabled with a hint when the patient has no email.
+- [ ] Billing: paid rows have a **Receipt** button (tooltip shows the last sent date).
+- [ ] Public page of a paid invoice is titled **Receipt** and shows "Paid on …". The tax rate shows exactly (5,5 %, not 6%).
+
+### 13.7 Session notes as files
+
+- [ ] Session page → **Note files** → **Upload note** (PDF/image): the file appears labelled "Session note"; it has no share button and never appears in the patient portal.
+- [ ] A therapy session with an uploaded note and no typed text can be **Mark as completed**.
+- [ ] Note files also appear in the patient's Documents list, labelled "Session note".
+
+### 13.8 Notes after deleting a patient
+
+- [ ] Delete a patient who has session notes: their profile (from Recently deleted or a direct link) lists all sessions; each opens with a "deleted on …" banner and the notes readable.
+
+### 13.9 Retention reminders
+
+- [ ] Settings → **Data retention**: years (default 5) saves.
+- [ ] Overview → Reminders lists active patients with no session for that long ("consider deleting") and patients in Recently deleted for that long ("delete permanently", link to Recently deleted). Test by setting the value to 1 and using old data, or adjusting dates in the DB.
+
+---
+
 ## Suspected issues
 
 Found by reading the code while writing this plan, then verified on 2026-10-15. **Confirmed** = proven by a runtime test or by unambiguous code. **Likely** = depends on the device or browser, confirm during the run. Sorted by severity.
@@ -597,22 +687,22 @@ Found by reading the code while writing this plan, then verified on 2026-10-15. 
 | 1 | 🔴 Blocker | Public invoice | The page crashes with **HTTP 500** ("Event handlers cannot be passed to Client Component props") because the print button's `onClick` is on a server component. Every invoice link is broken: billing, invoice panel, patient portal and reminder emails. | ✅ Fixed — retest | 8.2, 10.1 |
 | 2 | 🔴 Blocker | Portal / sign-up | Clerk `user.created` creates a practitioner workspace for **every** new account. An invited patient either sees "Wrong account" or gets linked, then is redirected from `/portal/*` to their own empty practitioner `/dashboard`. The portal is unusable. | ✅ Fixed — retest (invite sign-up now tags the account as a patient) | 5.3 |
 | 3 | 🔴 Blocker | Time zones | The server parses booking times in its own time zone. On Cloud Run (UTC), a practitioner booking for 14:00 is stored as 16:00 Paris time, and a patient booking for 09:00 lands at 11:00. Server-rendered pages (session page, profile, portal) and client-rendered ones (calendar) will also show **different** times for the same session. "Today" and the greeting use UTC. | ✅ Fixed — retest (server defaults to Europe/Paris; booking form sends exact timestamps) | 6.2, 6.6, 12.4 |
-| 4 | 🟠 Major | Invoices | `invoiceNumber` has a global unique index, but numbers are counted per practitioner. The second practitioner's first invoice fails. Deleting a patient cascades their invoices, so the count drops and the next number collides. | Confirmed (unique index in init migration) | 8.3, 11.2, 11.3 |
-| 5 | 🟠 Major | Calendar | Appointment blocks have no click handler. `updateAppointmentStatus` exists but no UI calls it, so there's no way to cancel, mark no-show, reschedule or delete. | Confirmed (code) | 6.5 |
-| 6 | 🟠 Major | Pre-session prep | Previous session notes are passed to the dialog without `decrypt()`, so the practitioner sees `enc:…`. | Confirmed (code) | 7.1 |
-| 7 | 🟠 Major | Patient deletion | Cascades to invoices (accounting history lost) and never deletes the patient's GCS files (orphaned health data). | Confirmed (`ON DELETE CASCADE`; `deletePatient` doesn't call GCS) | 11.3 |
+| 4 | 🟠 Major | Invoices | `invoiceNumber` has a global unique index, but numbers are counted per practitioner. The second practitioner's first invoice fails. Deleting a patient cascades their invoices, so the count drops and the next number collides. | ✅ Fixed — numbering per practitioner, never reuses a number | 8.3, 11.2, 11.3 |
+| 5 | 🟠 Major | Calendar | Appointment blocks have no click handler. `updateAppointmentStatus` exists but no UI calls it, so there's no way to cancel, mark no-show, reschedule or delete. | ✅ Fixed — session panel on click | 6.3 |
+| 6 | 🟠 Major | Pre-session prep | Previous session notes are passed to the dialog without `decrypt()`, so the practitioner sees `enc:…`. | ✅ Fixed — retest | 7.1 |
+| 7 | 🟠 Major | Patient deletion | Cascades to invoices (accounting history lost) and never deletes the patient's GCS files (orphaned health data). | ✅ Fixed — soft delete; permanent delete removes files and is refused while invoices exist | 3.8, 11.3 |
 | 8 | 🟠 Major | Settings | Saving zero working days makes `/portal/book` loop forever (page hangs, server CPU pinned). End hour before start hour is accepted. | ✅ Fixed — retest (both rejected at save; portal loop bounded) | 2.3 |
-| 9 | 🟠 Major | Touch devices | Tailwind v4 only applies `group-hover` on devices that support hover, so on phones/tablets the document actions and "Write notes" stay **invisible but tappable**. You can delete a document by tapping an empty-looking area. | Likely (confirm on a real phone) | 4.6, 7.1 |
-| 10 | 🟡 Minor | Invoice panel | Keeps its initial state after "Generate invoice", so the button stays until reload and a second click gives "Invoice already exists". | Confirmed (code) | 8.1 |
-| 11 | 🟡 Minor | Documents | List keeps its initial state, so new uploads only appear after a reload. Success toast fires before the database record is saved. | Confirmed (code) | 4.1 |
+| 9 | 🟠 Major | Touch devices | Tailwind v4 only applies `group-hover` on devices that support hover, so on phones/tablets the document actions and "Write notes" stay **invisible but tappable**. You can delete a document by tapping an empty-looking area. | ✅ Fixed — always visible on touch screens | 4.6, 7.1 |
+| 10 | 🟡 Minor | Invoice panel | Keeps its initial state after "Generate invoice", so the button stays until reload and a second click gives "Invoice already exists". | ✅ Fixed — retest | 8.1 |
+| 11 | 🟡 Minor | Documents | List keeps its initial state, so new uploads only appear after a reload. Success toast fires before the database record is saved. | ✅ Fixed — retest | 4.1 |
 | 12 | 🟡 Minor | Access control | Dashboard only checks "signed in", not "is a practitioner". Hidden today by #2 (everyone gets a workspace), but it becomes real once #2 is fixed. | ✅ Fixed — retest (patients are redirected to the portal) | 11.5 |
 | 13 | 🟡 Minor | Calendar | No overlap check for practitioner bookings; sessions outside 08:00–20:00 are drawn clamped to the edges. | ✅ Overlaps fixed (new booking flow) — clamping remains | 6.4 |
 | 14 | 🟡 Minor | Portal booking | Availability only blocks the start hour of existing appointments, so a free-looking slot can fail with "no longer available". | Confirmed (code) | 6.6 |
-| 15 | 🟡 Minor | Session reopen | Sets status back to Scheduled, which hides the invoice panel of an invoiced session. | Confirmed (code) | 7.4 |
+| 15 | 🟡 Minor | Session reopen | Sets status back to Scheduled, which hides the invoice panel of an invoiced session. | ✅ Fixed — invoiced sessions stay Completed | 7.4 |
 | 16 | 🟡 Minor | Currency | `€` hard-coded on Overview stats and patient session history. | ✅ Fixed — retest | 2.4 |
-| 17 | 🟡 Minor | Documents | Delete has no confirmation; signed links expire after 15 min on an open page. | Confirmed (code) | 4.3, 4.5 |
+| 17 | 🟡 Minor | Documents | Delete has no confirmation; signed links expire after 15 min on an open page. | ✅ Fixed — confirmation added; links sign a fresh URL per click (+ `VIEW_DOCUMENT` audit) | 4.3, 4.5 |
 | 18 | 🟡 Minor | Billing | "Mark sent" sends no email; "Paid" can't be undone; list capped at 50 rows. | Confirmed (code) | 9.1, 9.2 |
-| 19 | 🟡 Minor | Invoice content | No practitioner address / professional ID / legal mentions; tax rate printed rounded (5.5 % → "6%"). | Confirmed (code) | 8.2, 2.3 |
+| 19 | 🟡 Minor | Invoice content | No practitioner address / professional ID / legal mentions; tax rate printed rounded (5.5 % → "6%"). | Tax rounding ✅ fixed; legal mentions still open | 8.2, 2.3 |
 | 20 | ⚪ Cosmetic | Header | Header search box and notification bell do nothing. | ✅ Fixed — search works from every page, bell removed | 3.5 |
 | 21 | ⚪ Cosmetic | Notes page | Clinical Notes is a placeholder, but the sidebar badge and "View all" point to it. | Confirmed (code) | 1.4, 7.1 |
 | 22 | ⚪ Cosmetic | Practice name | Can't be changed after sign-up. | Confirmed (code) | 1.3 |

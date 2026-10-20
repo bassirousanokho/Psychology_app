@@ -14,7 +14,7 @@ export async function markInvoicePaid(invoiceId: string) {
   const workspaceId = await getOrgId();
 
   const result = await prisma.invoice.updateMany({
-    where: { id: invoiceId, workspaceId },
+    where: { id: invoiceId, workspaceId, status: { not: "PAID" } },
     data: { status: "PAID", paidAt: new Date() },
   });
 

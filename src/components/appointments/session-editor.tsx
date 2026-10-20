@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { isHourly, type SessionType } from "@/lib/session-types";
 
 type SaveIndicator = "idle" | "saving" | "saved" | "error";
 
@@ -28,6 +29,8 @@ export type SessionAppointment = {
   sessionNotes: string | null;
   noteCompletedAt: string | null; // ISO
   status: "SCHEDULED" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
+  type: SessionType;
+  hasNoteFiles: boolean; // an uploaded note can replace typed notes
   startTime: string; // ISO
   endTime: string;   // ISO
   patient: {
@@ -69,6 +72,9 @@ export function SessionEditor({ appointment }: SessionEditorProps) {
   const [isPending, startTransition] = useTransition();
 
   const isCompleted = appointment.noteCompletedAt !== null;
+  // Therapy sessions need typed notes or an uploaded note file; hourly work needs neither
+  const canComplete =
+    isHourly(appointment.type) || notes.trim().length > 0 || appointment.hasNoteFiles;
 
   // ── Auto-save draft every 2.5 s of inactivity ──
   const triggerAutoSave = useCallback(
@@ -215,7 +221,7 @@ export function SessionEditor({ appointment }: SessionEditorProps) {
 
           <Button
             onClick={handleComplete}
-            disabled={isPending || notes.trim().length === 0}
+            disabled={isPending || !canComplete}
             className="bg-green-600 hover:bg-green-700 text-white"
           >
             {isPending ? (
@@ -226,9 +232,9 @@ export function SessionEditor({ appointment }: SessionEditorProps) {
             Mark as completed
           </Button>
 
-          {notes.trim().length === 0 && (
+          {!canComplete && (
             <p className="text-xs text-muted-foreground">
-              Write at least a few words before completing.
+              Write a few words or upload a note file before completing.
             </p>
           )}
         </div>

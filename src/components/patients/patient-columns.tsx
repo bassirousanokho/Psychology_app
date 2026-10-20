@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import type { ColumnDef, SortingFn } from "@tanstack/react-table";
 import { MoreHorizontal, Pencil, Trash2, User } from "lucide-react";
 import { toast } from "sonner";
-import type { Patient } from "@/generated/prisma/client";
+import type { PatientRow } from "./types";
 import { deletePatient } from "@/app/(dashboard)/dashboard/patients/actions";
 import { Button } from "@/components/ui/button";
 import {
@@ -32,7 +32,13 @@ import { formatPhone } from "@/lib/phone";
 
 // ── Row actions cell ──────────────────────────────────────────────────────────
 
-function PatientRowActions({ patient }: { patient: Patient }) {
+function PatientRowActions({
+  patient,
+  defaultTariffLabel,
+}: {
+  patient: PatientRow;
+  defaultTariffLabel?: string;
+}) {
   const router = useRouter();
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -85,6 +91,7 @@ function PatientRowActions({ patient }: { patient: Patient }) {
 
       <EditPatientSheet
         patient={patient}
+        defaultTariffLabel={defaultTariffLabel}
         open={editOpen}
         onOpenChange={setEditOpen}
       />
@@ -94,11 +101,11 @@ function PatientRowActions({ patient }: { patient: Patient }) {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete patient?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete{" "}
               <strong>
                 {patient.firstName} {patient.lastName}
               </strong>{" "}
-              and all associated records. This action cannot be undone.
+              moves to Recently deleted: history and invoices are kept, upcoming sessions are
+              cancelled and portal access stops. You can restore them from there.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -122,10 +129,10 @@ function PatientRowActions({ patient }: { patient: Patient }) {
 const collator = new Intl.Collator("fr", { sensitivity: "base", numeric: true });
 
 /** Accent- and case-insensitive text sort; empty values always last. */
-const textSort: SortingFn<Patient> = (a, b, columnId) =>
+const textSort: SortingFn<PatientRow> = (a, b, columnId) =>
   collator.compare(a.getValue<string>(columnId) ?? "", b.getValue<string>(columnId) ?? "");
 
-export const patientColumns: ColumnDef<Patient>[] = [
+export const patientColumns: ColumnDef<PatientRow>[] = [
   {
     accessorFn: (row) => `${row.lastName} ${row.firstName}`,
     id: "name",
@@ -177,6 +184,11 @@ export const patientColumns: ColumnDef<Patient>[] = [
   {
     id: "actions",
     enableSorting: false,
-    cell: ({ row }) => <PatientRowActions patient={row.original} />,
+    cell: ({ row, table }) => (
+      <PatientRowActions
+        patient={row.original}
+        defaultTariffLabel={(table.options.meta as { defaultTariffLabel?: string } | undefined)?.defaultTariffLabel}
+      />
+    ),
   },
 ];

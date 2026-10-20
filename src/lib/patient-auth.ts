@@ -41,7 +41,7 @@ export async function requirePatientAuth(): Promise<PatientSession> {
   const pu = await prisma.patientUser.findUnique({
     where: { clerkUserId: userId },
     include: {
-      patient: { select: { id: true, firstName: true, lastName: true, email: true } },
+      patient: { select: { id: true, firstName: true, lastName: true, email: true, deletedAt: true } },
       workspace: {
         select: {
           id: true,
@@ -57,13 +57,18 @@ export async function requirePatientAuth(): Promise<PatientSession> {
     },
   });
 
-  if (!pu) redirect("/portal/no-access");
+  if (!pu || pu.patient.deletedAt) redirect("/portal/no-access");
 
   return {
     clerkUserId: pu.clerkUserId,
     patientId: pu.patientId,
     workspaceId: pu.workspaceId,
-    patient: pu.patient,
+    patient: {
+      id: pu.patient.id,
+      firstName: pu.patient.firstName,
+      lastName: pu.patient.lastName,
+      email: pu.patient.email,
+    },
     workspace: {
       ...pu.workspace,
       defaultTariff: Number(pu.workspace.defaultTariff),

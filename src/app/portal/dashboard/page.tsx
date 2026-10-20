@@ -5,7 +5,6 @@ import { requirePatientAuth } from "@/lib/patient-auth";
 import prisma from "@/lib/prisma";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { getSignedReadUrl } from "@/lib/gcs";
 
 const STATUS_VARIANTS = {
   SCHEDULED: "secondary",
@@ -41,9 +40,8 @@ export default async function PortalDashboardPage() {
     }),
   ]);
 
-  const recentDocs = await Promise.all(
-    recentDocRows.map(async (d) => ({ ...d, url: await getSignedReadUrl(d.fileKey) })),
-  );
+  // Opened through /api/documents/[id], which signs a fresh URL on each click
+  const recentDocs = recentDocRows.map((d) => ({ ...d, url: `/api/documents/${d.id}` }));
 
   return (
     <div className="p-6 space-y-6 max-w-3xl mx-auto">

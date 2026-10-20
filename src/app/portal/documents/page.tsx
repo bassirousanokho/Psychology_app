@@ -3,7 +3,6 @@ import { Download, FileText, Image as ImageIcon } from "lucide-react";
 import { requirePatientAuth } from "@/lib/patient-auth";
 import prisma from "@/lib/prisma";
 import { Button } from "@/components/ui/button";
-import { getSignedReadUrl } from "@/lib/gcs";
 
 function fileIcon(fileType: string) {
   if (fileType.startsWith("image/")) return <ImageIcon className="h-4 w-4 text-blue-500" />;
@@ -28,9 +27,8 @@ export default async function PortalDocumentsPage() {
     orderBy: { createdAt: "desc" },
   });
 
-  const documents = await Promise.all(
-    rows.map(async (d) => ({ ...d, url: await getSignedReadUrl(d.fileKey) })),
-  );
+  // Opened through /api/documents/[id], which signs a fresh URL on each click
+  const documents = rows.map((d) => ({ ...d, url: `/api/documents/${d.id}` }));
 
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-4">

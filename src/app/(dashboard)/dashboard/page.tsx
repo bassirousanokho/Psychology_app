@@ -10,6 +10,9 @@ import {
 import { Header } from "@/components/layout/header";
 import prisma from "@/lib/prisma";
 import { ensureWorkspace } from "@/lib/workspace";
+import { decrypt } from "@/lib/crypto";
+import { getReminders } from "@/lib/reminders";
+import { Reminders } from "@/components/dashboard/reminders";
 import {
   TodaysSchedule,
   type TodayAppointment,
@@ -45,6 +48,7 @@ export default async function DashboardPage() {
     todayRaw,
     pendingRaw,
     monthlyStats,
+    reminders,
   ] = await Promise.all([
     currentUser(),
 
@@ -86,6 +90,7 @@ export default async function DashboardPage() {
         workspaceId: userId,
         endTime: { lt: now },
         noteCompletedAt: null,
+        type: "PSYCHOTHERAPY", // notes are optional for hourly work
         status: { notIn: ["CANCELLED", "NO_SHOW"] },
       },
       include: {
@@ -97,7 +102,7 @@ export default async function DashboardPage() {
 
     // ── Monthly aggregate stats ──────────────────────────────────────────────
     Promise.all([
-      prisma.patient.count({ where: { workspaceId: userId } }),
+      prisma.patient.count({ where: { workspaceId: userId, deletedAt: null } }),
       prisma.appointment.findMany({
         where: {
           workspaceId: userId,
@@ -122,6 +127,8 @@ export default async function DashboardPage() {
         _sum: { totalAmount: true },
       }),
     ]),
+
+    getReminders(userId),
   ]);
 
   // ── Serialize Dates → ISO strings ────────────────────────────────────────
@@ -138,7 +145,7 @@ export default async function DashboardPage() {
       previousNote:
         a.patient.appointments[0]
           ? {
-              sessionNotes: a.patient.appointments[0].sessionNotes,
+              sessionNotes: decrypt(a.patient.appointments[0].sessionNotes), // stored encrypted
               startTime: a.patient.appointments[0].startTime.toISOString(),
             }
           : null,
@@ -232,6 +239,9 @@ export default async function DashboardPage() {
             )}
           </h2>
         </div>
+
+        {/* ── Reminders (rate announcements, cancellation alerts, retention) ── */}
+        <Reminders data={reminders} />
 
         {/* ── Today's schedule + Pending tasks ── */}
         <div className="grid gap-4 lg:grid-cols-2">

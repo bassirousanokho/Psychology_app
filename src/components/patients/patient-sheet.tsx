@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import type { Patient } from "@/generated/prisma/client";
+import type { PatientRow } from "./types";
 import { createPatient, updatePatient } from "@/app/(dashboard)/dashboard/patients/actions";
 import type { PatientFormData } from "@/lib/schemas";
 import { PatientForm } from "./patient-form";
@@ -19,7 +19,7 @@ import { UserPlus } from "lucide-react";
 
 // ── Create button + sheet ─────────────────────────────────────────────────────
 
-export function CreatePatientButton() {
+export function CreatePatientButton({ defaultTariffLabel }: { defaultTariffLabel?: string }) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
@@ -52,6 +52,7 @@ export function CreatePatientButton() {
           </SheetHeader>
           <div className="mt-6">
             <PatientForm
+              defaultTariffLabel={defaultTariffLabel}
               onSubmit={handleSubmit}
               onCancel={() => setOpen(false)}
               isSubmitting={isPending}
@@ -66,12 +67,13 @@ export function CreatePatientButton() {
 // ── Edit sheet ────────────────────────────────────────────────────────────────
 
 interface EditPatientSheetProps {
-  patient: Patient;
+  patient: PatientRow;
+  defaultTariffLabel?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-export function EditPatientSheet({ patient, open, onOpenChange }: EditPatientSheetProps) {
+export function EditPatientSheet({ patient, defaultTariffLabel, open, onOpenChange }: EditPatientSheetProps) {
   const [isPending, startTransition] = useTransition();
 
   async function handleSubmit(data: PatientFormData) {
@@ -97,6 +99,7 @@ export function EditPatientSheet({ patient, open, onOpenChange }: EditPatientShe
         </SheetHeader>
         <div className="mt-6">
           <PatientForm
+            defaultTariffLabel={defaultTariffLabel}
             defaultValues={{
               firstName: patient.firstName,
               lastName: patient.lastName,
@@ -105,6 +108,12 @@ export function EditPatientSheet({ patient, open, onOpenChange }: EditPatientShe
               dateOfBirth: patient.dateOfBirth?.toISOString().slice(0, 10) ?? "",
               gender: (patient.gender as PatientFormData["gender"]) ?? "",
               pronouns: patient.pronouns ?? "",
+              emergencyContactName: patient.emergencyContactName ?? "",
+              emergencyContactPhone: formatPhone(patient.emergencyContactPhone) ?? "",
+              emergencyContactRelation: patient.emergencyContactRelation ?? "",
+              doctorName: patient.doctorName ?? "",
+              doctorPhone: formatPhone(patient.doctorPhone) ?? "",
+              tariff: patient.tariff != null ? String(patient.tariff) : "",
               backgroundNotes: patient.backgroundNotes ?? "",
             }}
             onSubmit={handleSubmit}

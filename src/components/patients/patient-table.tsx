@@ -11,7 +11,7 @@ import {
   type SortingState,
 } from "@tanstack/react-table";
 import { ArrowDown, ArrowUp, ArrowUpDown, Search } from "lucide-react";
-import type { Patient } from "@/generated/prisma/client";
+import type { PatientRow } from "./types";
 import { patientColumns } from "./patient-columns";
 import { phoneSearchDigits } from "@/lib/phone";
 import { Input } from "@/components/ui/input";
@@ -26,8 +26,9 @@ import {
 } from "@/components/ui/table";
 
 interface PatientTableProps {
-  patients: Patient[];
+  patients: PatientRow[];
   initialQuery?: string;
+  defaultTariffLabel?: string;
 }
 
 /** Lowercase, accent-free, trimmed — so "  éloïse" matches "Eloise". */
@@ -36,7 +37,7 @@ function normalize(text: string): string {
 }
 
 /** Matches name or email by text, and phone by digits in any format (06…, +33 6…, 336…). */
-const patientSearch: FilterFn<Patient> = (row, _columnId, query: string) => {
+const patientSearch: FilterFn<PatientRow> = (row, _columnId, query: string) => {
   const q = normalize(query);
   if (!q) return true;
   const p = row.original;
@@ -46,7 +47,7 @@ const patientSearch: FilterFn<Patient> = (row, _columnId, query: string) => {
   return digits.length >= 2 && phoneSearchDigits(p.phone).some((d) => d.includes(digits));
 };
 
-export function PatientTable({ patients, initialQuery = "" }: PatientTableProps) {
+export function PatientTable({ patients, initialQuery = "", defaultTariffLabel }: PatientTableProps) {
   const [sorting, setSorting] = useState<SortingState>([{ id: "name", desc: false }]);
   const [globalFilter, setGlobalFilter] = useState(initialQuery);
 
@@ -57,6 +58,7 @@ export function PatientTable({ patients, initialQuery = "" }: PatientTableProps)
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
     globalFilterFn: patientSearch,
+    meta: { defaultTariffLabel },
     enableSortingRemoval: false, // header clicks toggle asc ↔ desc, never back to "unsorted"
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),

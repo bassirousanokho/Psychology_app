@@ -14,6 +14,11 @@ export default async function SettingsPage() {
     where: { id: userId },
     select: {
       defaultTariff: true,
+      hourlyRateAdmin: true,
+      hourlyRateWriting: true,
+      cancellationNoticeHours: true,
+      cancellationAlertThreshold: true,
+      retentionYears: true,
       taxRate: true,
       currency: true,
       workingHoursStart: true,
@@ -25,7 +30,11 @@ export default async function SettingsPage() {
   if (!workspace) redirect("/dashboard");
 
   const defaults = {
-    defaultTariff: Number(workspace.defaultTariff),
+    hourlyRateAdmin: Number(workspace.hourlyRateAdmin),
+    hourlyRateWriting: Number(workspace.hourlyRateWriting),
+    cancellationNoticeHours: workspace.cancellationNoticeHours,
+    cancellationAlertThreshold: workspace.cancellationAlertThreshold,
+    retentionYears: workspace.retentionYears,
     taxRate: Number(workspace.taxRate),
     currency: workspace.currency,
     workingHoursStart: workspace.workingHoursStart,
@@ -38,7 +47,10 @@ export default async function SettingsPage() {
       <Header title="Settings" />
       <main className="flex-1 p-6">
         <div className="mx-auto max-w-2xl space-y-6">
-          <SettingsForm defaults={defaults} />
+          <SettingsForm
+            defaults={defaults}
+            practiceRate={Number(workspace.defaultTariff)}
+          />
         </div>
       </main>
     </>

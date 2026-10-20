@@ -4,10 +4,11 @@ import { useState } from "react";
 import Link from "next/link";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import { ExternalLink, CheckCircle, Send, Loader2 } from "lucide-react";
+import { ExternalLink, CheckCircle, Send, Loader2, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { markInvoicePaid, markInvoiceSent } from "@/app/(dashboard)/dashboard/billing/actions";
+import { sendReceipt } from "@/app/(dashboard)/dashboard/appointments/actions";
 
 export type InvoiceRow = {
   id: string;
@@ -17,6 +18,7 @@ export type InvoiceRow = {
   status: "DRAFT" | "SENT" | "PAID" | "OVERDUE";
   dueDate: string;
   paidAt: string | null;
+  receiptSentAt: string | null;
   publicToken: string;
 };
 
@@ -43,6 +45,14 @@ export function BillingTable({ rows, currency }: BillingTableProps) {
     const result = await markInvoiceSent(id);
     setLoadingId(null);
     if (!result.success) toast.error(result.error ?? "Failed");
+  }
+
+  async function handleSendReceipt(id: string) {
+    setLoadingId(id);
+    const result = await sendReceipt(id);
+    setLoadingId(null);
+    if (result.success) toast.success("Receipt sent");
+    else toast.error(result.error ?? "Failed");
   }
 
   async function handleMarkPaid(id: string) {
@@ -115,8 +125,8 @@ export function BillingTable({ rows, currency }: BillingTableProps) {
                       </Button>
                     )}
 
-                    {/* Mark as Paid (SENT or OVERDUE) */}
-                    {(row.status === "SENT" || row.status === "OVERDUE") && (
+                    {/* Mark as Paid (any unpaid invoice: payment is due at the session) */}
+                    {row.status !== "PAID" && (
                       <Button
                         variant="outline"
                         size="sm"
@@ -126,6 +136,21 @@ export function BillingTable({ rows, currency }: BillingTableProps) {
                       >
                         {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />}
                         <span className="ml-1.5">Paid</span>
+                      </Button>
+                    )}
+
+                    {/* Receipt (quittance) for paid invoices */}
+                    {row.status === "PAID" && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => handleSendReceipt(row.id)}
+                        disabled={busy}
+                        title={row.receiptSentAt ? `Last sent ${format(new Date(row.receiptSentAt), "d MMM yyyy")}` : undefined}
+                      >
+                        {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mail className="h-3.5 w-3.5" />}
+                        <span className="ml-1.5">{row.receiptSentAt ? "Resend receipt" : "Receipt"}</span>
                       </Button>
                     )}
                   </div>

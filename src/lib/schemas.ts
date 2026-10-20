@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { normalizePhone } from "@/lib/phone";
+import { SESSION_TYPES } from "@/lib/session-types";
 
 export const GENDERS = ["FEMALE", "MALE", "OTHER"] as const;
 export const GENDER_LABELS: Record<(typeof GENDERS)[number], string> = {
@@ -30,6 +31,22 @@ export const patientSchema = z.object({
     ),
   gender: z.enum(GENDERS).optional().or(z.literal("")),
   pronouns: z.string().trim().max(40, "Keep pronouns under 40 characters").optional(),
+  emergencyContactName: z.string().trim().optional(),
+  emergencyContactPhone: z
+    .string()
+    .optional()
+    .refine((v) => !v?.trim() || normalizePhone(v) !== null, "Invalid phone number"),
+  emergencyContactRelation: z.string().trim().optional(),
+  doctorName: z.string().trim().optional(),
+  doctorPhone: z
+    .string()
+    .optional()
+    .refine((v) => !v?.trim() || normalizePhone(v) !== null, "Invalid phone number"),
+  // Empty = practice default rate
+  tariff: z
+    .string()
+    .optional()
+    .refine((v) => !v?.trim() || (!isNaN(Number(v)) && Number(v) >= 0), "Enter a valid amount"),
   backgroundNotes: z.string().optional(),
 });
 
@@ -38,6 +55,7 @@ export const appointmentSchema = z
     patientId: z.string().min(1, "Please select a patient"),
     startTime: z.string().min(1, "Start time is required"),
     endTime: z.string().min(1, "End time is required"),
+    type: z.enum(SESSION_TYPES).default("PSYCHOTHERAPY"),
   })
   .refine(
     (d) => new Date(d.endTime) > new Date(d.startTime),
@@ -45,4 +63,4 @@ export const appointmentSchema = z
   );
 
 export type PatientFormData = z.infer<typeof patientSchema>;
-export type AppointmentFormData = z.infer<typeof appointmentSchema>;
+export type AppointmentFormData = z.input<typeof appointmentSchema>;

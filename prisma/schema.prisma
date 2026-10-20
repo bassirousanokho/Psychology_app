@@ -23,6 +23,12 @@ enum AppointmentStatus {
   NO_SHOW
 }
 
+enum SessionType {
+  PSYCHOTHERAPY // priced per session (patient rate)
+  ADMIN // administrative work, priced per hour
+  WRITING // report writing, priced per hour
+}
+
 enum InvoiceStatus {
   DRAFT
   SENT
@@ -44,8 +50,20 @@ model Workspace {
   taxRate       Decimal @default(0) @db.Decimal(5, 2)
   currency      String  @default("EUR")
 
+  // Hourly rates for non-therapy work (time filled per half hour)
+  hourlyRateAdmin   Decimal @default(0) @db.Decimal(10, 2)
+  hourlyRateWriting Decimal @default(0) @db.Decimal(10, 2)
+
+  // Cancellations: notice period shown when cancelling (the practitioner decides
+  // whether a fee applies) and the per-patient alert threshold over 30 days
+  cancellationNoticeHours    Int @default(48)
+  cancellationAlertThreshold Int @default(3)
+
+  // Data retention reminders: inactive patients, and patients in Recently deleted
+  retentionYears Int @default(5)
+
   // Availability settings
-  workingDays       Int[]  // 1=Mon … 7=Sun (ISO weekday)
+  workingDays       Int[] // 1=Mon … 7=Sun (ISO weekday)
   workingHoursStart String @default("09:00") // "HH:mm"
   workingHoursEnd   String @default("18:00") // "HH:mm"
 
@@ -59,6 +77,7 @@ model Workspace {
   documents      Document[]
   patientUsers   PatientUser[]
   patientInvites PatientInvite[]
+  rateChanges    PatientRateChange[]
 }
 
 // ---------------------------------------------------------------------------
@@ -73,9 +92,9 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  workspaces         WorkspaceMember[]
-  appointments       Appointment[] @relation("PractitionerAppointments")
-  uploadedDocuments  Document[]    @relation("UploadedDocuments")
+  workspaces        WorkspaceMember[]
+  appointments      Appointment[]     @relation("PractitionerAppointments")
+  uploadedDocuments Document[]        @relation("UploadedDocuments")
 }
 
 // Join table that stores the role of a User within a specific Workspace.
@@ -106,26 +125,41 @@ model Patient {
   firstName   String
   lastName    String
   email       String?
-  phone       String?   // normalised international format, e.g. "+33 6 12 34 56 78"
+  phone       String? // normalised international format, e.g. "+33 6 12 34 56 78"
   dateOfBirth DateTime? @db.Date
-  gender      String?   // "FEMALE" | "MALE" | "OTHER"
+  gender      String? // "FEMALE" | "MALE" | "OTHER"
   pronouns    String?
+
+  emergencyContactName     String?
+  emergencyContactPhone    String?
+  emergencyContactRelation String?
+  doctorName               String? // family doctor
+  doctorPhone              String?
+
+  // Individual psychotherapy rate; null = practice default. Scheduled changes in PatientRateChange.
+  tariff Decimal? @db.Decimal(10, 2)
 
   // General (non-session) notes visible to practitioners
   backgroundNotes String?
 
+  // Soft delete: set when the practitioner deletes the patient. The record moves to
+  // "Recently deleted" (history and invoices kept) until restored or permanently deleted.
+  deletedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  workspace    Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace    Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   appointments Appointment[]
   invoices     Invoice[]
   documents    Document[]
   portalUser   PatientUser?
   invites      PatientInvite[]
+  rateChanges  PatientRateChange[]
 
   @@index([workspaceId])
   @@index([workspaceId, lastName])
+  @@index([workspaceId, deletedAt])
 }
 
 // ---------------------------------------------------------------------------
@@ -140,14 +174,22 @@ model Appointment {
   startTime      DateTime
   endTime        DateTime
   status         AppointmentStatus @default(SCHEDULED)
+  type           SessionType       @default(PSYCHOTHERAPY)
+
+  // Cancellation: when, and the fee charged (null = no fee). The practitioner
+  // decides whether a cancellation is late; charging a fee is the default.
+  cancelledAt     DateTime?
+  cancellationFee Decimal?  @db.Decimal(10, 2)
 
   // Session note written after the appointment (practitioners only)
   sessionNotes    String?
   noteCompletedAt DateTime?
 
-  // Tariff snapshot at time of booking (may differ from workspace default)
-  tariffAmount Decimal @db.Decimal(10, 2)
-  taxRate      Decimal @db.Decimal(5, 2)
+  // Price snapshot at booking: the session price for psychotherapy, or
+  // hourlyRate × duration for hourly work (recomputed when the time changes)
+  tariffAmount Decimal  @db.Decimal(10, 2)
+  hourlyRate   Decimal? @db.Decimal(10, 2)
+  taxRate      Decimal  @db.Decimal(5, 2)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -176,11 +218,13 @@ model Document {
   uploadedById  String
 
   name     String
-  fileKey  String  // GCS object key (used for signed URLs + deletion)
-  fileType String  // MIME type
-  fileSize Int     // bytes
+  fileKey  String // GCS object key (used for signed URLs + deletion)
+  fileType String // MIME type
+  fileSize Int // bytes
 
   sharedWithPatient Boolean @default(false)
+  // Uploaded instead of typed session notes: never shared with the patient
+  isSessionNote     Boolean @default(false)
 
   createdAt DateTime @default(now())
 
@@ -231,11 +275,11 @@ model PatientInvite {
 // ---------------------------------------------------------------------------
 
 model AuditLog {
-  id           String   @id @default(cuid())
+  id           String @id @default(cuid())
   workspaceId  String
-  userId       String   // Clerk user ID
-  action       String   // e.g. "VIEW_PATIENT_NOTES", "EDIT_SESSION_NOTES"
-  resourceType String   // "Patient" | "Appointment" | "Document"
+  userId       String // Clerk user ID
+  action       String // e.g. "VIEW_PATIENT_NOTES", "EDIT_SESSION_NOTES"
+  resourceType String // "Patient" | "Appointment" | "Document"
   resourceId   String
   metadata     Json?
 
@@ -250,12 +294,12 @@ model AuditLog {
 // ---------------------------------------------------------------------------
 
 model Invoice {
-  id            String        @id @default(cuid())
+  id            String  @id @default(cuid())
   workspaceId   String
   patientId     String
-  appointmentId String?       @unique // one-to-one with Appointment
+  appointmentId String? @unique // one-to-one with Appointment
 
-  invoiceNumber String  @unique
+  invoiceNumber String // sequential per workspace and year: INV-2026-0001
   amount        Decimal @db.Decimal(10, 2)
   taxAmount     Decimal @db.Decimal(10, 2)
   taxRate       Decimal @db.Decimal(5, 2)
@@ -266,8 +310,9 @@ model Invoice {
   status  InvoiceStatus @default(DRAFT)
   dueDate DateTime
 
-  paidAt          DateTime?
-  reminderSentAt  DateTime? // last dunning reminder timestamp
+  paidAt         DateTime?
+  receiptSentAt  DateTime? // last time the receipt (quittance) was emailed
+  reminderSentAt DateTime? // last dunning reminder timestamp
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -276,7 +321,27 @@ model Invoice {
   patient     Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
   appointment Appointment? @relation(fields: [appointmentId], references: [id])
 
+  @@unique([workspaceId, invoiceNumber])
   @@index([workspaceId])
   @@index([workspaceId, status])
   @@index([patientId])
+}
+
+// A patient's psychotherapy rate from a given date, with a reminder until the
+// practitioner has told the patient. Sessions already booked keep their price.
+model PatientRateChange {
+  id             String    @id @default(cuid())
+  workspaceId    String
+  patientId      String
+  amount         Decimal   @db.Decimal(10, 2)
+  previousAmount Decimal   @db.Decimal(10, 2)
+  effectiveFrom  DateTime  @db.Date
+  notifiedAt     DateTime? // practitioner marked the patient as informed
+  createdAt      DateTime  @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  patient   Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, notifiedAt])
+  @@index([patientId, effectiveFrom])
 }

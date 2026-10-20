@@ -31,7 +31,10 @@ export type AuditAction =
   | "VIEW_DOCUMENT"
   | "UPLOAD_DOCUMENT"
   | "DELETE_DOCUMENT"
-  | "EXPORT_PATIENT_DATA";
+  | "EXPORT_PATIENT_DATA"
+  | "DELETE_PATIENT"
+  | "RESTORE_PATIENT"
+  | "PURGE_PATIENT";
 
 /**
  * Writes an audit log entry asynchronously (fire-and-forget).

@@ -1,6 +1,6 @@
 "use client";
 
-import { useForm } from "react-hook-form";
+import { useForm, type UseFormReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
 import { GENDERS, GENDER_LABELS, patientSchema, type PatientFormData } from "@/lib/schemas";
@@ -18,6 +18,7 @@ import {
 
 interface PatientFormProps {
   defaultValues?: Partial<PatientFormData>;
+  defaultTariffLabel?: string; // practice rate, shown as placeholder
   onSubmit: (data: PatientFormData) => Promise<void>;
   onCancel: () => void;
   isSubmitting?: boolean;
@@ -25,6 +26,7 @@ interface PatientFormProps {
 
 export function PatientForm({
   defaultValues,
+  defaultTariffLabel,
   onSubmit,
   onCancel,
   isSubmitting,
@@ -39,6 +41,12 @@ export function PatientForm({
       dateOfBirth: "",
       gender: "",
       pronouns: "",
+      emergencyContactName: "",
+      emergencyContactPhone: "",
+      emergencyContactRelation: "",
+      doctorName: "",
+      doctorPhone: "",
+      tariff: "",
       backgroundNotes: "",
       ...defaultValues,
     },
@@ -154,6 +162,32 @@ export function PatientForm({
           />
         </div>
 
+        <fieldset className="space-y-3 rounded-lg border p-3">
+          <legend className="px-1 text-xs font-medium text-muted-foreground">Emergency contact</legend>
+          <div className="grid grid-cols-2 gap-3">
+            <TextField form={form} name="emergencyContactName" label="Full name" />
+            <TextField form={form} name="emergencyContactRelation" label="Relationship" placeholder="Mother, partner…" />
+          </div>
+          <TextField form={form} name="emergencyContactPhone" label="Phone" type="tel" placeholder="+33 6 00 00 00 00" />
+        </fieldset>
+
+        <fieldset className="space-y-3 rounded-lg border p-3">
+          <legend className="px-1 text-xs font-medium text-muted-foreground">Family doctor</legend>
+          <div className="grid grid-cols-2 gap-3">
+            <TextField form={form} name="doctorName" label="Full name" placeholder="Dr Marie Leroy" />
+            <TextField form={form} name="doctorPhone" label="Phone" type="tel" placeholder="+33 1 00 00 00 00" />
+          </div>
+        </fieldset>
+
+        <TextField
+          form={form}
+          name="tariff"
+          label="Individual session rate"
+          type="number"
+          placeholder={defaultTariffLabel ? `Practice rate (${defaultTariffLabel})` : "Practice rate"}
+          description="Leave empty to use the practice rate. To change it from a later date with a reminder, use “Schedule rate change” on the patient file."
+        />
+
         <FormField
           control={form.control}
           name="backgroundNotes"
@@ -183,5 +217,45 @@ export function PatientForm({
         </div>
       </form>
     </Form>
+  );
+}
+
+function TextField({
+  form,
+  name,
+  label,
+  type = "text",
+  placeholder,
+  description,
+}: {
+  form: UseFormReturn<PatientFormData>;
+  name: keyof PatientFormData;
+  label: string;
+  type?: string;
+  placeholder?: string;
+  description?: string;
+}) {
+  return (
+    <FormField
+      control={form.control}
+      name={name}
+      render={({ field }) => (
+        <FormItem>
+          <FormLabel>{label}</FormLabel>
+          <FormControl>
+            <Input
+              type={type}
+              placeholder={placeholder}
+              step={type === "number" ? "0.01" : undefined}
+              min={type === "number" ? "0" : undefined}
+              {...field}
+              value={field.value ?? ""}
+            />
+          </FormControl>
+          {description && <p className="text-xs text-muted-foreground">{description}</p>}
+          <FormMessage />
+        </FormItem>
+      )}
+    />
   );
 }

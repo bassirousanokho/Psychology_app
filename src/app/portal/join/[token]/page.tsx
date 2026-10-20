@@ -17,12 +17,12 @@ export default async function JoinPortalPage({ params }: PageProps) {
   const invite = await prisma.patientInvite.findUnique({
     where: { token },
     include: {
-      patient: { select: { id: true, firstName: true, lastName: true, email: true } },
+      patient: { select: { id: true, firstName: true, lastName: true, email: true, deletedAt: true } },
       workspace: { select: { name: true } },
     },
   });
 
-  if (!invite) return <InvalidInvite reason="not-found" />;
+  if (!invite || invite.patient.deletedAt) return <InvalidInvite reason="not-found" />;
   if (invite.usedAt) return <InvalidInvite reason="used" />;
   if (invite.expiresAt < new Date()) return <InvalidInvite reason="expired" />;
 

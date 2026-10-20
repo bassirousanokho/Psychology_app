@@ -5,7 +5,21 @@ import { addMinutes, format, isToday, parse } from "date-fns";
 import { CalendarPlus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { createAppointment, getBusyIntervals } from "@/app/(dashboard)/dashboard/calendar/actions";
+import {
+  HOURLY_DURATIONS,
+  HOURLY_STEP_MIN,
+  SESSION_TYPES,
+  SESSION_TYPE_LABELS,
+  formatDuration,
+  hourlyAmount,
+  isHourly,
+  type SessionType,
+} from "@/lib/session-types";
+import {
+  createAppointment,
+  getBusyIntervals,
+  rescheduleAppointment,
+} from "@/app/(dashboard)/dashboard/calendar/actions";
 import type { PatientOption } from "./patient-combobox";
 import { PatientCombobox } from "./patient-combobox";
 import { Button } from "@/components/ui/button";
@@ -24,6 +38,8 @@ export type Availability = {
   workingDays: number[];      // 1=Mon … 7=Sun
   workingHoursStart: string;  // "HH:mm"
   workingHoursEnd: string;    // "HH:mm"
+  hourlyRates: { ADMIN: number; WRITING: number };
+  currency: string;
 };
 
 const DURATIONS = [30, 45, 50, 60, 75, 90, 120];
@@ -48,13 +64,18 @@ function isoDay(d: Date): number {
   return d.getDay() === 0 ? 7 : d.getDay();
 }
 
-/** Start times (HH:mm) on `date` where a session of `duration` fits without overlapping `busy`. */
+/**
+ * Start times (HH:mm) on `date` where a session of `duration` fits without
+ * overlapping `busy`. Hourly work passes no busy intervals and allowPast, since
+ * it may overlap anything and is often logged afterwards.
+ */
 function freeStartTimes(
   date: Date,
   duration: number,
   rangeStart: string,
   rangeEnd: string,
   busy: Interval[],
+  allowPast = false,
 ): string[] {
   const now = new Date();
   const times: string[] = [];
@@ -62,7 +83,7 @@ function freeStartTimes(
     const start = new Date(date);
     start.setHours(Math.floor(m / 60), m % 60, 0, 0);
     const end = addMinutes(start, duration);
-    if (isToday(date) && start <= now) continue;
+    if (!allowPast && isToday(date) && start <= now) continue;
     if (busy.some((b) => b.start < end && b.end > start)) continue;
     times.push(toHHmm(m));
   }
@@ -93,7 +114,7 @@ export function BookingDialog({
         <DialogHeader>
           <DialogTitle>Book appointment</DialogTitle>
           <DialogDescription>
-            Pick a patient, a date and a duration, then choose a free start time.
+            Pick a patient, the type, a date and a duration, then choose a start time.
           </DialogDescription>
         </DialogHeader>
         {/* Mounted only while open so every opening starts from fresh values */}
@@ -112,26 +133,47 @@ export function BookingDialog({
 
 // ── Form ──────────────────────────────────────────────────────────────────────
 
-function BookingForm({
+/** When set, the form moves an existing session instead of booking a new one. */
+export type RescheduleTarget = {
+  appointmentId: string;
+  patientName: string;
+  type: SessionType;
+  start: Date;
+  durationMin: number;
+};
+
+export function BookingForm({
   patients,
   availability,
   initialStart,
+  reschedule,
   onDone,
+  onCancel = onDone,
 }: {
   patients: PatientOption[];
   availability: Availability;
   initialStart?: Date;
+  reschedule?: RescheduleTarget;
   onDone: () => void;
+  onCancel?: () => void;
 }) {
-  const initialTime = initialStart ? format(initialStart, "HH:mm") : null;
+  const start0 = reschedule?.start ?? initialStart;
+  const initialDuration = reschedule?.durationMin ?? DEFAULT_DURATION;
+  const [type, setType] = useState<SessionType>(reschedule?.type ?? "PSYCHOTHERAPY");
+  const hourly = isHourly(type);
+  const baseDurations = hourly ? HOURLY_DURATIONS : DURATIONS;
+  const durations = baseDurations.includes(initialDuration)
+    ? baseDurations
+    : [...baseDurations, initialDuration].sort((a, b) => a - b);
+  const initialTime = start0 ? format(start0, "HH:mm") : null;
   const outsideHours =
     initialTime !== null &&
     (toMinutes(initialTime) < toMinutes(availability.workingHoursStart) ||
-      toMinutes(initialTime) + DEFAULT_DURATION > toMinutes(availability.workingHoursEnd));
+      toMinutes(initialTime) + initialDuration > toMinutes(availability.workingHoursEnd));
 
   const [patientId, setPatientId] = useState("");
-  const [date, setDate] = useState(format(initialStart ?? new Date(), "yyyy-MM-dd"));
-  const [duration, setDuration] = useState(DEFAULT_DURATION);
+  const [date, setDate] = useState(format(start0 ?? new Date(), "yyyy-MM-dd"));
+  const [duration, setDuration] = useState(initialDuration);
   const [startTime, setStartTime] = useState<string | null>(initialTime);
   const [showAllTimes, setShowAllTimes] = useState(outsideHours);
   const [busy, setBusy] = useState<Interval[] | null>(null); // null = loading
@@ -140,7 +182,8 @@ function BookingForm({
 
   function loadBusy(forDate: string) {
     latestDate.current = forDate;
-    getBusyIntervals(forDate).then((rows) => {
+    // When rescheduling, the session's own current slot counts as free
+    getBusyIntervals(forDate, reschedule?.appointmentId).then((rows) => {
       if (latestDate.current !== forDate) return; // a newer date was picked meanwhile
       setBusy(rows.map((r) => ({ start: new Date(r.start), end: new Date(r.end) })));
     });
@@ -148,6 +191,7 @@ function BookingForm({
 
   useEffect(() => {
     loadBusy(latestDate.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once on mount
   }, []);
 
   function handleDateChange(value: string) {
@@ -162,7 +206,23 @@ function BookingForm({
   const isWorkingDay = day ? availability.workingDays.includes(isoDay(day)) : true;
   const rangeStart = showAllTimes ? EXTENDED_START : availability.workingHoursStart;
   const rangeEnd = showAllTimes ? EXTENDED_END : availability.workingHoursEnd;
-  const times = day && busy ? freeStartTimes(day, duration, rangeStart, rangeEnd, busy) : [];
+  const times =
+    day && busy
+      ? hourly
+        ? freeStartTimes(day, duration, rangeStart, rangeEnd, [], true)
+        : freeStartTimes(day, duration, rangeStart, rangeEnd, busy)
+      : [];
+  const hourlyPrice = hourly ? hourlyAmount(availability.hourlyRates[type as "ADMIN" | "WRITING"], duration) : null;
+
+  function handleTypeChange(next: SessionType) {
+    setType(next);
+    // Hourly work is filled per half hour: snap the duration to a valid step
+    if (isHourly(next) && duration % HOURLY_STEP_MIN !== 0) {
+      setDuration(Math.max(HOURLY_STEP_MIN, Math.round(duration / HOURLY_STEP_MIN) * HOURLY_STEP_MIN));
+    } else if (!isHourly(next) && !DURATIONS.includes(duration)) {
+      setDuration(DEFAULT_DURATION);
+    }
+  }
 
   // A previously picked time may stop fitting when the duration or range changes
   const selected = startTime && times.includes(startTime) ? startTime : null;
@@ -170,19 +230,22 @@ function BookingForm({
   const end = start ? addMinutes(start, duration) : null;
 
   function handleSubmit() {
-    if (!patientId) {
+    if (!reschedule && !patientId) {
       toast.error("Please select a patient");
       return;
     }
     if (!start || !end) return;
     startTransition(async () => {
-      const result = await createAppointment({
-        patientId,
-        startTime: start.toISOString(),
-        endTime: end.toISOString(),
-      });
+      const result = reschedule
+        ? await rescheduleAppointment(reschedule.appointmentId, start.toISOString(), end.toISOString())
+        : await createAppointment({
+            patientId,
+            type,
+            startTime: start.toISOString(),
+            endTime: end.toISOString(),
+          });
       if (result.success) {
-        toast.success("Appointment booked");
+        toast.success(reschedule ? "Appointment rescheduled" : "Appointment booked");
         onDone();
       } else {
         toast.error(result.error);
@@ -196,7 +259,43 @@ function BookingForm({
       {/* Patient */}
       <div className="space-y-1.5">
         <Label>Patient</Label>
-        <PatientCombobox patients={patients} value={patientId} onChange={setPatientId} />
+        {reschedule ? (
+          <p className="text-sm font-medium">{reschedule.patientName}</p>
+        ) : (
+          <PatientCombobox patients={patients} value={patientId} onChange={setPatientId} />
+        )}
+      </div>
+
+      {/* Type (fixed when rescheduling) */}
+      <div className="space-y-1.5">
+        <Label>Type</Label>
+        {reschedule ? (
+          <p className="text-sm font-medium">{SESSION_TYPE_LABELS[type]}</p>
+        ) : (
+          <div className="grid grid-cols-3 gap-1.5">
+            {SESSION_TYPES.map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => handleTypeChange(t)}
+                className={cn(
+                  "rounded-md border px-2 py-1.5 text-xs font-medium transition-colors",
+                  type === t
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-input bg-background hover:bg-muted",
+                )}
+              >
+                {SESSION_TYPE_LABELS[t]}
+              </button>
+            ))}
+          </div>
+        )}
+        {hourly && (
+          <p className="text-xs text-muted-foreground">
+            Billed per hour ({availability.hourlyRates[type as "ADMIN" | "WRITING"].toFixed(2)}{" "}
+            {availability.currency}/h). Can overlap other sessions.
+          </p>
+        )}
       </div>
 
       {/* Date + duration */}
@@ -211,16 +310,16 @@ function BookingForm({
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="booking-duration">Duration</Label>
+          <Label htmlFor="booking-duration">{hourly ? "Time spent" : "Duration"}</Label>
           <select
             id="booking-duration"
             value={duration}
             onChange={(e) => setDuration(Number(e.target.value))}
             className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            {DURATIONS.map((d) => (
+            {durations.map((d) => (
               <option key={d} value={d}>
-                {d < 60 ? `${d} min` : `${Math.floor(d / 60)} h${d % 60 ? ` ${d % 60}` : ""}`}
+                {formatDuration(d)}
               </option>
             ))}
           </select>
@@ -244,7 +343,7 @@ function BookingForm({
             </p>
           )}
 
-          {busy === null ? (
+          {busy === null && !hourly ? (
             <p className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
               Checking availability…
@@ -280,16 +379,18 @@ function BookingForm({
       <div className="flex items-center justify-between gap-3 border-t pt-4">
         <p className="text-sm text-muted-foreground">
           {start && end
-            ? `${format(start, "EEE d MMM")} · ${format(start, "HH:mm")}–${format(end, "HH:mm")}`
+            ? `${format(start, "EEE d MMM")} · ${format(start, "HH:mm")}–${format(end, "HH:mm")}${
+                hourlyPrice !== null ? ` · ${hourlyPrice.toFixed(2)} ${availability.currency}` : ""
+              }`
             : "Select a start time"}
         </p>
         <div className="flex gap-2">
-          <Button type="button" variant="outline" onClick={onDone}>
-            Cancel
+          <Button type="button" variant="outline" onClick={onCancel}>
+            {reschedule ? "Back" : "Cancel"}
           </Button>
           <Button onClick={handleSubmit} disabled={isPending || !start}>
             {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Book
+            {reschedule ? "Move session" : "Book"}
           </Button>
         </div>
       </div>

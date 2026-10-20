@@ -3,7 +3,8 @@
 import { useForm, type UseFormReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
-import { GENDERS, GENDER_LABELS, patientSchema, type PatientFormData } from "@/lib/schemas";
+import { GENDERS, GENDER_LABELS, patientSchemaFor, type PatientFormData } from "@/lib/schemas";
+import { DEFAULT_REGION, regionConfig } from "@/lib/regions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,6 +20,7 @@ import {
 interface PatientFormProps {
   defaultValues?: Partial<PatientFormData>;
   defaultTariffLabel?: string; // practice rate, shown as placeholder
+  region?: string;              // practice region: phone format and placeholders
   onSubmit: (data: PatientFormData) => Promise<void>;
   onCancel: () => void;
   isSubmitting?: boolean;
@@ -27,12 +29,14 @@ interface PatientFormProps {
 export function PatientForm({
   defaultValues,
   defaultTariffLabel,
+  region = DEFAULT_REGION,
   onSubmit,
   onCancel,
   isSubmitting,
 }: PatientFormProps) {
+  const cfg = regionConfig(region);
   const form = useForm<PatientFormData>({
-    resolver: zodResolver(patientSchema),
+    resolver: zodResolver(patientSchemaFor(cfg.phoneCountry)),
     defaultValues: {
       firstName: "",
       lastName: "",
@@ -41,6 +45,7 @@ export function PatientForm({
       dateOfBirth: "",
       gender: "",
       pronouns: "",
+      address: "",
       emergencyContactName: "",
       emergencyContactPhone: "",
       emergencyContactRelation: "",
@@ -105,7 +110,7 @@ export function PatientForm({
             <FormItem>
               <FormLabel>Phone</FormLabel>
               <FormControl>
-                <Input type="tel" placeholder="+33 6 00 00 00 00" {...field} />
+                <Input type="tel" placeholder={cfg.phonePlaceholder} {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -162,20 +167,41 @@ export function PatientForm({
           />
         </div>
 
+        <FormField
+          control={form.control}
+          name="address"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Postal address</FormLabel>
+              <FormControl>
+                <Textarea
+                  rows={2}
+                  placeholder={cfg.addressPlaceholder}
+                  className="resize-none"
+                  {...field}
+                  value={field.value ?? ""}
+                />
+              </FormControl>
+              <p className="text-xs text-muted-foreground">Printed on invoices.</p>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
         <fieldset className="space-y-3 rounded-lg border p-3">
           <legend className="px-1 text-xs font-medium text-muted-foreground">Emergency contact</legend>
           <div className="grid grid-cols-2 gap-3">
             <TextField form={form} name="emergencyContactName" label="Full name" />
             <TextField form={form} name="emergencyContactRelation" label="Relationship" placeholder="Mother, partner…" />
           </div>
-          <TextField form={form} name="emergencyContactPhone" label="Phone" type="tel" placeholder="+33 6 00 00 00 00" />
+          <TextField form={form} name="emergencyContactPhone" label="Phone" type="tel" placeholder={cfg.phonePlaceholder} />
         </fieldset>
 
         <fieldset className="space-y-3 rounded-lg border p-3">
           <legend className="px-1 text-xs font-medium text-muted-foreground">Family doctor</legend>
           <div className="grid grid-cols-2 gap-3">
             <TextField form={form} name="doctorName" label="Full name" placeholder="Dr Marie Leroy" />
-            <TextField form={form} name="doctorPhone" label="Phone" type="tel" placeholder="+33 1 00 00 00 00" />
+            <TextField form={form} name="doctorPhone" label="Phone" type="tel" placeholder={cfg.phonePlaceholder} />
           </div>
         </fieldset>
 

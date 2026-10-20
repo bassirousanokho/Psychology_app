@@ -678,6 +678,77 @@ Run once on the deployed (UTC) environment from a browser in Europe/Paris:
 
 ---
 
+## 14. Invoice legal mentions, header/footer, messages (batch of 2026-10-21)
+
+### 14.1 Legal details
+
+- [ ] Settings → **Invoices: legal details & branding**: an amber box lists what's missing (address, SIRET, ADELI or RPPS, VAT mention) and disappears once filled in ("All required legal details are filled in").
+- [ ] Validation: SIRET must be 14 digits, ADELI 9, RPPS 11 (spaces allowed); wrong lengths are refused with a message.
+- [ ] VAT mention is pre-filled with « TVA non applicable, art. 261-4-1° du CGI »; payment terms with « Paiement à réception, le jour de la séance. »; both editable.
+- [ ] Billing page shows an amber banner with the missing details and a link to Settings until complete.
+- [ ] Patient form has a **Postal address** (optional), shown on the profile.
+
+### 14.2 Invoice / receipt page (French)
+
+- [ ] Open an invoice: title **Note d'honoraires** (or **Reçu** when paid), "N° INV-…".
+- [ ] Issuer block: name as printed (or practice name), professional title, address on several lines, "SIRET : 123 456 789 00012", "N° ADELI : …" / "N° RPPS : …".
+- [ ] **Facturé à**: patient name, address (if filled in), email.
+- [ ] Dates in French format: Date d'émission, Date de la séance, Échéance.
+- [ ] Line in French: "Séance de psychothérapie — 20 octobre 2026", "Travail administratif — … (1 h 30)", "Frais d'annulation — séance du …"; amounts like "70,00 €".
+- [ ] Without tax: "Total" + VAT mention under the line. With tax: "Total HT", "TVA (5,5 %)", "Total TTC" and no exemption mention.
+- [ ] Status: "Acquittée le …" (paid), "En attente de paiement", "Paiement en retard".
+- [ ] Payment terms and other mentions appear at the bottom; "Imprimer / Enregistrer en PDF" prints cleanly (button hidden).
+
+### 14.3 Header and footer images
+
+- [ ] Upload a header (PNG/JPEG/WebP): preview appears in Settings; it shows at the top of every invoice and in print.
+- [ ] Same for a footer at the bottom. Header only, footer only, and both all work.
+- [ ] **Replace** swaps the image (old file removed from the bucket); **Remove** clears it.
+- [ ] A PDF or an image over 5 MB is refused.
+
+### 14.4 Writing to patients
+
+- [ ] Patient file → **Messages** → **Write to patient**: subject + message, **Send**.
+- [ ] With Resend configured: "Message sent"; the patient receives it with your practice name as sender; **replying goes to your own email**. Line breaks are kept.
+- [ ] Without Resend: "Saved but not sent: no email provider is configured"; the history shows a **Not sent** badge.
+- [ ] History lists messages newest first; clicking expands the full text, recipient and any error.
+- [ ] Button disabled with a reason when the patient has no email or was deleted.
+- [ ] DB check: `Message.body` starts with `enc:`; an `AuditLog` `SEND_MESSAGE` row is written.
+
+---
+
+## 15. Canada (Québec) as default, Montréal hosting (2026-10-22)
+
+Recette now runs at **https://psy-app-804784013458.northamerica-northeast1.run.app** (Montréal). Earlier sections written for France (phone `+33…`, SIRET/ADELI, VAT) apply to a practice whose region is set to France.
+
+### 15.1 Defaults
+
+- [ ] A brand-new practitioner gets region **Canada — Québec**, currency **CAD**, tax mention « Services de psychothérapie exonérés de TPS et de TVQ. », payment terms « Paiement exigible le jour de la séance. ».
+- [ ] Times are Montréal time (America/Toronto): book 14:00 → 14:00 everywhere; "Good morning/afternoon" matches Montréal.
+
+### 15.2 Region setting
+
+- [ ] Settings → Billing defaults → **Country / region** lists Canada — Québec and France. Switching changes the currency to CAD / EUR (still editable) and, after saving, replaces the tax mention and payment terms if they were still the previous region's defaults (edited text is kept).
+
+### 15.3 Phones
+
+- [ ] Québec practice: `514-555-0123`, `(438) 555 0199` → `+1 514 555 0123`, `+1 438 555 0199`; a number with a country code (`+33 6 …`) is accepted; `0612345678` is refused.
+- [ ] France practice: `0612345678` → `+33 6 12 34 56 78` as before. Placeholders follow the region.
+
+### 15.4 Legal details and invoice (Québec)
+
+- [ ] Settings → Invoices shows **OPQ permit number** (required), **NEQ**, **GST number**, **QST number**; no SIRET/ADELI/RPPS. The missing-details box asks for address + OPQ permit.
+- [ ] Invoice page: title **Facture** (**Reçu** when paid), "N° de permis OPQ : …", "NEQ : …", GST/QST numbers when filled in, amounts like "130,00 $", dates in Québec French, the exemption mention. No SIRET/ADELI or French VAT text.
+- [ ] With a tax rate: "Sous-total", "Taxes (14,975 %)", "Total (taxes incluses)".
+
+### 15.5 Hosting
+
+- [ ] Documents upload and open from the Montréal URL (bucket `psy-app-documents-recette-ca`, location NORTHAMERICA-NORTHEAST1).
+- [ ] Header/footer invoice images upload and display.
+- [ ] Clerk webhook endpoint points at the **Montréal** URL; `user.created` delivery shows 200 (requires `CLERK_WEBHOOK_SECRET` on the service).
+
+---
+
 ## Suspected issues
 
 Found by reading the code while writing this plan, then verified on 2026-10-15. **Confirmed** = proven by a runtime test or by unambiguous code. **Likely** = depends on the device or browser, confirm during the run. Sorted by severity.
@@ -702,7 +773,7 @@ Found by reading the code while writing this plan, then verified on 2026-10-15. 
 | 16 | 🟡 Minor | Currency | `€` hard-coded on Overview stats and patient session history. | ✅ Fixed — retest | 2.4 |
 | 17 | 🟡 Minor | Documents | Delete has no confirmation; signed links expire after 15 min on an open page. | ✅ Fixed — confirmation added; links sign a fresh URL per click (+ `VIEW_DOCUMENT` audit) | 4.3, 4.5 |
 | 18 | 🟡 Minor | Billing | "Mark sent" sends no email; "Paid" can't be undone; list capped at 50 rows. | Confirmed (code) | 9.1, 9.2 |
-| 19 | 🟡 Minor | Invoice content | No practitioner address / professional ID / legal mentions; tax rate printed rounded (5.5 % → "6%"). | Tax rounding ✅ fixed; legal mentions still open | 8.2, 2.3 |
+| 19 | 🟡 Minor | Invoice content | No practitioner address / professional ID / legal mentions; tax rate printed rounded (5.5 % → "6%"). | ✅ Fixed — legal details in Settings, French invoice page, tax rate exact | 8.2, 14 |
 | 20 | ⚪ Cosmetic | Header | Header search box and notification bell do nothing. | ✅ Fixed — search works from every page, bell removed | 3.5 |
 | 21 | ⚪ Cosmetic | Notes page | Clinical Notes is a placeholder, but the sidebar badge and "View all" point to it. | Confirmed (code) | 1.4, 7.1 |
 | 22 | ⚪ Cosmetic | Practice name | Can't be changed after sign-up. | Confirmed (code) | 1.3 |

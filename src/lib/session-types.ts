@@ -9,11 +9,11 @@ export const SESSION_TYPE_LABELS: Record<SessionType, string> = {
   WRITING: "Report writing",
 };
 
-/** Invoice line description. */
+/** Invoice line description (invoices are issued in French). */
 export const SESSION_TYPE_INVOICE_LABELS: Record<SessionType, string> = {
-  PSYCHOTHERAPY: "Therapy session",
-  ADMIN: "Administrative work",
-  WRITING: "Report writing",
+  PSYCHOTHERAPY: "Séance de psychothérapie",
+  ADMIN: "Travail administratif",
+  WRITING: "Rédaction de compte rendu",
 };
 
 /**

@@ -3,7 +3,9 @@
 import { auth } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 import prisma from "@/lib/prisma";
-import { patientSchema, type PatientFormData } from "@/lib/schemas";
+import { patientSchemaFor, type PatientFormData } from "@/lib/schemas";
+import { regionConfig } from "@/lib/regions";
+import type { CountryCode } from "libphonenumber-js/min";
 import { normalizePhone } from "@/lib/phone";
 import { deleteFile } from "@/lib/gcs";
 import { audit } from "@/lib/tenant";
@@ -18,20 +20,26 @@ async function getOrgId(): Promise<string> {
   return userId;
 }
 
-function toPatientData(data: PatientFormData) {
+async function phoneCountry(workspaceId: string): Promise<CountryCode> {
+  const ws = await prisma.workspace.findUnique({ where: { id: workspaceId }, select: { region: true } });
+  return regionConfig(ws?.region).phoneCountry;
+}
+
+function toPatientData(data: PatientFormData, country: CountryCode) {
   return {
     firstName: data.firstName,
     lastName: data.lastName,
     email: data.email || null,
-    phone: data.phone?.trim() ? normalizePhone(data.phone) : null,
+    phone: data.phone?.trim() ? normalizePhone(data.phone, country) : null,
     dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : null,
     gender: data.gender || null,
     pronouns: data.pronouns || null,
+    address: data.address || null,
     emergencyContactName: data.emergencyContactName || null,
-    emergencyContactPhone: data.emergencyContactPhone?.trim() ? normalizePhone(data.emergencyContactPhone) : null,
+    emergencyContactPhone: data.emergencyContactPhone?.trim() ? normalizePhone(data.emergencyContactPhone, country) : null,
     emergencyContactRelation: data.emergencyContactRelation || null,
     doctorName: data.doctorName || null,
-    doctorPhone: data.doctorPhone?.trim() ? normalizePhone(data.doctorPhone) : null,
+    doctorPhone: data.doctorPhone?.trim() ? normalizePhone(data.doctorPhone, country) : null,
     tariff: data.tariff?.trim() ? Number(data.tariff) : null,
     backgroundNotes: data.backgroundNotes || null,
   };
@@ -40,17 +48,18 @@ function toPatientData(data: PatientFormData) {
 // ── Create ───────────────────────────────────────────────────────────────────
 
 export async function createPatient(data: PatientFormData): Promise<ActionResult> {
-  const parsed = patientSchema.safeParse(data);
+  const workspaceId = await getOrgId();
+  const country = await phoneCountry(workspaceId);
+  const parsed = patientSchemaFor(country).safeParse(data);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Invalid form data" };
   }
 
   try {
-    const workspaceId = await getOrgId();
     await prisma.patient.create({
       data: {
         workspaceId,
-        ...toPatientData(parsed.data),
+        ...toPatientData(parsed.data, country),
       },
     });
     revalidatePath("/dashboard/patients");
@@ -67,18 +76,19 @@ export async function updatePatient(
   id: string,
   data: PatientFormData,
 ): Promise<ActionResult> {
-  const parsed = patientSchema.safeParse(data);
+  const workspaceId = await getOrgId();
+  const country = await phoneCountry(workspaceId);
+  const parsed = patientSchemaFor(country).safeParse(data);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Invalid form data" };
   }
 
   try {
-    const workspaceId = await getOrgId();
     // updateMany with workspaceId ensures we never touch another tenant's row
     const result = await prisma.patient.updateMany({
       where: { id, workspaceId, deletedAt: null },
       data: {
-        ...toPatientData(parsed.data),
+        ...toPatientData(parsed.data, country),
       },
     });
     if (result.count === 0) return { success: false, error: "Patient not found" };

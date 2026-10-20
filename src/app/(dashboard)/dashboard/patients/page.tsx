@@ -75,7 +75,7 @@ export default async function PatientsPage({
     prisma.patient.count({ where: { workspaceId: userId, deletedAt: { not: null } } }),
     prisma.workspace.findUnique({
       where: { id: userId },
-      select: { defaultTariff: true, currency: true },
+      select: { defaultTariff: true, currency: true, region: true },
     }),
   ]);
   const defaultTariffLabel = workspace
@@ -105,7 +105,7 @@ export default async function PatientsPage({
                 Recently deleted ({deletedCount})
               </Button>
             )}
-            <CreatePatientButton defaultTariffLabel={defaultTariffLabel} />
+            <CreatePatientButton defaultTariffLabel={defaultTariffLabel} region={workspace?.region} />
           </div>
         </div>
 
@@ -115,6 +115,7 @@ export default async function PatientsPage({
           patients={patients.map(toPatientRow)}
           initialQuery={q}
           defaultTariffLabel={defaultTariffLabel}
+          region={workspace?.region}
         />
       </main>
     </>

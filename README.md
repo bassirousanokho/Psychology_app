@@ -199,7 +199,7 @@ All variables are documented in `.env.example`. Here is what each one does:
 | `RESEND_FROM_EMAIL` | No | Verified sender address in Resend |
 | `NEXT_PUBLIC_APP_URL` | Yes (prod) | Full public URL — used in invoice email links |
 | `CRON_SECRET` | Yes (prod) | Random secret to protect the dunning cron endpoint |
-| `TZ` | No | Practice time zone for server-side dates ("today", portal booking hours). Defaults to `Europe/Paris` (`src/instrumentation.ts`); Cloud Run itself runs in UTC |
+| `TZ` | No | Practice time zone for server-side dates ("today", portal booking hours). Defaults to `America/Toronto` (Montréal, `src/instrumentation.ts`); use `Europe/Paris` for France. Cloud Run itself runs in UTC |
 
 ---
 
@@ -421,7 +421,9 @@ Follow the [Neon setup](#neon-setup) section above — grab the **direct (non-po
 ### 3. Set up Google Cloud Storage
 
 ```bash
-gsutil mb -l europe-west1 gs://<your-bucket-name>
+gsutil mb -l northamerica-northeast1 gs://<your-bucket-name>
+# Montréal keeps patient documents in Canada (Québec's Law 25 expects personal
+# health information to stay in Québec/Canada or be assessed before transfer)
 ```
 
 Documents are served via signed URLs (`src/lib/gcs.ts`), never a public bucket. On Cloud Run there's no downloaded service-account key, so signing goes through the IAM SignBlob API instead — which means the runtime service account needs **two** roles, not just storage access:
@@ -465,7 +467,7 @@ RESEND_API_KEY: "re_..."
 RESEND_FROM_EMAIL: "invoices@yourdomain.com"
 NEXT_PUBLIC_APP_URL: "https://<placeholder — filled in after step 4, then redeploy>"
 CRON_SECRET: "<random secret, e.g. openssl rand -hex 32>"
-TZ: "Europe/Paris"
+TZ: "America/Toronto"
 ```
 
 > For anything beyond a throwaway test env, prefer `--set-secrets` with [Secret Manager](https://cloud.google.com/secret-manager) instead of a plaintext env file for `CLERK_SECRET_KEY`, `ENCRYPTION_KEY`, and `CRON_SECRET`.
@@ -477,7 +479,7 @@ Cloud Run's buildpacks auto-detect Next.js from `package.json` and run `npm run 
 ```bash
 gcloud run deploy psy-app \
   --source . \
-  --region europe-west1 \
+  --region northamerica-northeast1 \
   --allow-unauthenticated \
   --env-vars-file .env.yaml
 ```
@@ -489,7 +491,7 @@ Note the `*.run.app` URL printed at the end of the deploy.
 Update `NEXT_PUBLIC_APP_URL` in `.env.yaml` to the URL from step 5 (used in invoice email links), then redeploy:
 
 ```bash
-gcloud run deploy psy-app --source . --region europe-west1 --env-vars-file .env.yaml
+gcloud run deploy psy-app --source . --region northamerica-northeast1 --env-vars-file .env.yaml
 ```
 
 ### 7. Run migrations against Neon
@@ -508,9 +510,9 @@ Recreate the daily dunning job with Cloud Scheduler, calling the same protected 
 
 ```bash
 gcloud scheduler jobs create http psy-app-dunning \
-  --location europe-west1 \
+  --location northamerica-northeast1 \
   --schedule "0 8 * * *" \
-  --time-zone "Europe/Paris" \
+  --time-zone "America/Toronto" \
   --uri "https://<your-service>.run.app/api/cron/dunning" \
   --http-method GET \
   --headers "Authorization=Bearer <CRON_SECRET>"

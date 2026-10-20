@@ -19,7 +19,13 @@ import { UserPlus } from "lucide-react";
 
 // ── Create button + sheet ─────────────────────────────────────────────────────
 
-export function CreatePatientButton({ defaultTariffLabel }: { defaultTariffLabel?: string }) {
+export function CreatePatientButton({
+  defaultTariffLabel,
+  region,
+}: {
+  defaultTariffLabel?: string;
+  region?: string;
+}) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
@@ -53,6 +59,7 @@ export function CreatePatientButton({ defaultTariffLabel }: { defaultTariffLabel
           <div className="mt-6">
             <PatientForm
               defaultTariffLabel={defaultTariffLabel}
+              region={region}
               onSubmit={handleSubmit}
               onCancel={() => setOpen(false)}
               isSubmitting={isPending}
@@ -69,11 +76,12 @@ export function CreatePatientButton({ defaultTariffLabel }: { defaultTariffLabel
 interface EditPatientSheetProps {
   patient: PatientRow;
   defaultTariffLabel?: string;
+  region?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-export function EditPatientSheet({ patient, defaultTariffLabel, open, onOpenChange }: EditPatientSheetProps) {
+export function EditPatientSheet({ patient, defaultTariffLabel, region, open, onOpenChange }: EditPatientSheetProps) {
   const [isPending, startTransition] = useTransition();
 
   async function handleSubmit(data: PatientFormData) {
@@ -100,6 +108,7 @@ export function EditPatientSheet({ patient, defaultTariffLabel, open, onOpenChan
         <div className="mt-6">
           <PatientForm
             defaultTariffLabel={defaultTariffLabel}
+            region={region}
             defaultValues={{
               firstName: patient.firstName,
               lastName: patient.lastName,
@@ -108,6 +117,7 @@ export function EditPatientSheet({ patient, defaultTariffLabel, open, onOpenChan
               dateOfBirth: patient.dateOfBirth?.toISOString().slice(0, 10) ?? "",
               gender: (patient.gender as PatientFormData["gender"]) ?? "",
               pronouns: patient.pronouns ?? "",
+              address: patient.address ?? "",
               emergencyContactName: patient.emergencyContactName ?? "",
               emergencyContactPhone: formatPhone(patient.emergencyContactPhone) ?? "",
               emergencyContactRelation: patient.emergencyContactRelation ?? "",

@@ -2,7 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { differenceInYears, format } from "date-fns";
-import { AlertTriangle, ArrowLeft, Cake, CalendarDays, Mail, Phone, UserRound } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Cake, CalendarDays, Mail, MapPin, Phone, UserRound } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import prisma from "@/lib/prisma";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,8 @@ import { psychotherapyRate } from "@/lib/rates";
 import { cancellationStats } from "@/lib/cancellations";
 import { isHourly, SESSION_TYPE_LABELS } from "@/lib/session-types";
 import { RateCard } from "@/components/patients/rate-card";
+import { PatientMessages } from "@/components/patients/patient-messages";
+import { decrypt } from "@/lib/crypto";
 import { GENDER_LABELS } from "@/lib/schemas";
 
 interface PageProps {
@@ -53,6 +55,7 @@ export default async function PatientProfilePage({ params }: PageProps) {
         },
       },
       rateChanges: { orderBy: { effectiveFrom: "desc" } },
+      messages: { orderBy: { createdAt: "desc" }, take: 50 },
       documents: {
         orderBy: { createdAt: "desc" },
       },
@@ -155,6 +158,12 @@ export default async function PatientProfilePage({ params }: PageProps) {
                   {format(patient.dateOfBirth, "d MMMM yyyy")} ({differenceInYears(new Date(), patient.dateOfBirth)} y/o)
                 </span>
               )}
+              {patient.address && (
+                <span className="flex items-center gap-1.5">
+                  <MapPin className="h-3.5 w-3.5" />
+                  {patient.address.replace(/\n+/g, ", ")}
+                </span>
+              )}
               {(patient.gender || patient.pronouns) && (
                 <span className="flex items-center gap-1.5">
                   <UserRound className="h-3.5 w-3.5" />
@@ -193,6 +202,29 @@ export default async function PatientProfilePage({ params }: PageProps) {
               <ContactCard title="Family doctor" name={patient.doctorName} phone={patient.doctorPhone} />
             </div>
           )}
+
+          {/* Messages */}
+          <PatientMessages
+            patientId={patient.id}
+            patientName={`${patient.firstName} ${patient.lastName}`}
+            patientEmail={patient.email}
+            disabledReason={
+              patient.deletedAt
+                ? "This patient was deleted."
+                : !patient.email
+                ? "Add an email address to write to this patient."
+                : null
+            }
+            messages={patient.messages.map((m) => ({
+              id: m.id,
+              subject: m.subject,
+              body: decrypt(m.body) ?? "",
+              toEmail: m.toEmail,
+              status: m.status,
+              error: m.error,
+              createdAt: m.createdAt.toISOString(),
+            }))}
+          />
 
           {/* Rate */}
           <RateCard

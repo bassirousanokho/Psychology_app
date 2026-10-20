@@ -6,7 +6,8 @@ import prisma from "@/lib/prisma";
 import { requireAuth } from "@/lib/tenant";
 import { audit } from "@/lib/tenant";
 import { getUploadUrl, deleteFile } from "@/lib/gcs";
-import { sendPortalInvite } from "@/lib/email";
+import { sendPatientMessage, sendPortalInvite } from "@/lib/email";
+import { encrypt } from "@/lib/crypto";
 
 const MAX_PDF_BYTES = 16 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
@@ -193,4 +194,73 @@ export async function sendPortalInviteAction(patientId: string) {
 
   revalidatePath(`/dashboard/patients/${patientId}`);
   return { success: true };
+}
+
+// ── Write to the patient ──────────────────────────────────────────────────────
+
+const MAX_SUBJECT = 200;
+const MAX_BODY = 10_000;
+
+export async function sendPatientMessageAction(
+  patientId: string,
+  subject: string,
+  body: string,
+): Promise<{ success: true; status: "SENT" | "NOT_CONFIGURED" } | { success: false; error: string }> {
+  const { orgId, userId } = await requireAuth();
+  subject = subject.trim();
+  body = body.trim();
+  if (!subject) return { success: false, error: "Add a subject" };
+  if (!body) return { success: false, error: "Write a message" };
+  if (subject.length > MAX_SUBJECT) return { success: false, error: "Subject is too long" };
+  if (body.length > MAX_BODY) return { success: false, error: "Message is too long" };
+
+  const patient = await prisma.patient.findFirst({
+    where: { id: patientId, workspaceId: orgId, deletedAt: null },
+    select: { email: true, workspace: { select: { name: true, practitionerName: true } } },
+  });
+  if (!patient) return { success: false, error: "Patient not found" };
+  if (!patient.email) return { success: false, error: "Patient has no email address on file" };
+
+  const practitioner = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
+
+  let status: "SENT" | "NOT_CONFIGURED" | "FAILED";
+  let error: string | null = null;
+  try {
+    status = await sendPatientMessage({
+      to: patient.email,
+      practiceName: patient.workspace.practitionerName || patient.workspace.name,
+      replyTo: practitioner?.email || undefined,
+      subject,
+      body,
+    });
+  } catch (err) {
+    status = "FAILED";
+    error = err instanceof Error ? err.message : "Unknown error";
+    console.error("[sendPatientMessageAction]", err);
+  }
+
+  const message = await prisma.message.create({
+    data: {
+      workspaceId: orgId,
+      patientId,
+      senderId: userId,
+      toEmail: patient.email,
+      subject,
+      body: encrypt(body), // may contain clinical information
+      status,
+      error,
+    },
+  });
+  audit({
+    workspaceId: orgId,
+    userId,
+    action: "SEND_MESSAGE",
+    resourceType: "Patient",
+    resourceId: patientId,
+    metadata: { messageId: message.id, status },
+  });
+
+  revalidatePath(`/dashboard/patients/${patientId}`);
+  if (status === "FAILED") return { success: false, error: `The email could not be sent: ${error}` };
+  return { success: true, status };
 }

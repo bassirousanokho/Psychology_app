@@ -29,6 +29,7 @@ interface PatientTableProps {
   patients: PatientRow[];
   initialQuery?: string;
   defaultTariffLabel?: string;
+  region?: string;
 }
 
 /** Lowercase, accent-free, trimmed — so "  éloïse" matches "Eloise". */
@@ -47,7 +48,7 @@ const patientSearch: FilterFn<PatientRow> = (row, _columnId, query: string) => {
   return digits.length >= 2 && phoneSearchDigits(p.phone).some((d) => d.includes(digits));
 };
 
-export function PatientTable({ patients, initialQuery = "", defaultTariffLabel }: PatientTableProps) {
+export function PatientTable({ patients, initialQuery = "", defaultTariffLabel, region }: PatientTableProps) {
   const [sorting, setSorting] = useState<SortingState>([{ id: "name", desc: false }]);
   const [globalFilter, setGlobalFilter] = useState(initialQuery);
 
@@ -58,7 +59,7 @@ export function PatientTable({ patients, initialQuery = "", defaultTariffLabel }
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
     globalFilterFn: patientSearch,
-    meta: { defaultTariffLabel },
+    meta: { defaultTariffLabel, region },
     enableSortingRemoval: false, // header clicks toggle asc ↔ desc, never back to "unsorted"
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),

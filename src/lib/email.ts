@@ -103,3 +103,46 @@ export async function sendReceiptEmail(opts: SendReceiptOptions) {
     html,
   });
 }
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+interface SendPatientMessageOptions {
+  to: string;
+  practiceName: string;
+  replyTo?: string; // practitioner's own address: replies go to their inbox
+  subject: string;
+  body: string;     // plain text
+}
+
+/**
+ * A message written by the practitioner. Returns "NOT_CONFIGURED" when no email
+ * provider is set up (nothing is sent); throws if the provider refuses it.
+ */
+export async function sendPatientMessage(
+  opts: SendPatientMessageOptions,
+): Promise<"SENT" | "NOT_CONFIGURED"> {
+  if (!resend) {
+    console.log("[email] patient message (not sent, no provider) →", opts.to, opts.subject);
+    return "NOT_CONFIGURED";
+  }
+
+  const html = `<div style="font-family:system-ui,sans-serif;font-size:14px;line-height:1.6">${escapeHtml(opts.body).replace(/\n/g, "<br>")}</div>`;
+  const fromAddress = process.env.RESEND_FROM_EMAIL ?? "noreply@yourdomain.com";
+  const { error } = await resend.emails.send({
+    from: `${opts.practiceName.replace(/[<>"]/g, "")} <${fromAddress}>`,
+    to: opts.to,
+    replyTo: opts.replyTo,
+    subject: opts.subject,
+    text: opts.body,
+    html,
+  });
+  if (error) throw new Error(error.message);
+  return "SENT";
+}

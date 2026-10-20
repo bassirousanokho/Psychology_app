@@ -34,7 +34,8 @@ export type AuditAction =
   | "EXPORT_PATIENT_DATA"
   | "DELETE_PATIENT"
   | "RESTORE_PATIENT"
-  | "PURGE_PATIENT";
+  | "PURGE_PATIENT"
+  | "SEND_MESSAGE";
 
 /**
  * Writes an audit log entry asynchronously (fire-and-forget).

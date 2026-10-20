@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { format } from "date-fns";
 import { Header } from "@/components/layout/header";
 import prisma from "@/lib/prisma";
+import Link from "next/link";
+import { missingLegalDetails } from "@/lib/invoice-legal";
 import { ensureWorkspace } from "@/lib/workspace";
 import { BillingTable, type InvoiceRow } from "@/components/billing/billing-table";
 import { StatCard } from "@/components/billing/stat-card";
@@ -14,8 +16,21 @@ export default async function BillingPage() {
 
   const workspace = await prisma.workspace.findUnique({
     where: { id: userId },
-    select: { currency: true },
+    select: {
+      currency: true,
+      region: true,
+      address: true,
+      vatMention: true,
+      permitNumber: true,
+      neq: true,
+      gstNumber: true,
+      qstNumber: true,
+      siret: true,
+      adeli: true,
+      rpps: true,
+    },
   });
+  const missingLegal = workspace ? missingLegalDetails(workspace) : [];
   const currency = workspace?.currency ?? "EUR";
 
   const [invoices, stats] = await Promise.all([
@@ -61,6 +76,17 @@ export default async function BillingPage() {
       <Header title="Billing" />
       <main className="flex-1 p-6">
         <div className="mx-auto max-w-5xl space-y-6">
+
+          {missingLegal.length > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+              <p>
+                Your invoices are missing required legal details: {missingLegal.join(", ")}.
+              </p>
+              <Link href="/dashboard/settings" className="font-medium underline underline-offset-2">
+                Complete in Settings
+              </Link>
+            </div>
+          )}
 
           {/* Stats */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

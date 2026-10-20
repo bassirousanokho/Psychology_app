@@ -11,8 +11,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { updateSettings, exportPatientData, type SettingsFormData } from "@/app/(dashboard)/dashboard/settings/actions";
 import { ChangeRateDialog } from "./change-rate-dialog";
+import { REGIONS, REGION_CONFIG, type Region } from "@/lib/regions";
 
 const schema = z.object({
+  region: z.enum(REGIONS),
   hourlyRateAdmin: z.number({ message: "Enter an amount" }).min(0, "Must be 0 or greater"),
   hourlyRateWriting: z.number({ message: "Enter an amount" }).min(0, "Must be 0 or greater"),
   cancellationNoticeHours: z.number({ message: "Enter a number" }).int().min(0).max(720, "At most 30 days"),
@@ -107,6 +109,27 @@ export function SettingsForm({ defaults, practiceRate }: SettingsFormProps) {
       {/* Billing */}
       <section className="rounded-xl border bg-card p-6 space-y-5">
         <h2 className="font-semibold text-base">Billing defaults</h2>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="region">Country / region</Label>
+          <select
+            id="region"
+            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            {...register("region", {
+              // The currency follows the region; still editable below
+              onChange: (e) => setValue("currency", REGION_CONFIG[e.target.value as Region].currency),
+            })}
+          >
+            {REGIONS.map((r) => (
+              <option key={r} value={r}>
+                {REGION_CONFIG[r].label}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-muted-foreground">
+            Sets the currency, phone number format, legal details and wording of your invoices.
+          </p>
+        </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-muted/40 px-4 py-3">
           <div>

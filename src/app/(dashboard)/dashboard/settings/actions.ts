@@ -5,9 +5,11 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import prisma from "@/lib/prisma";
 import { audit } from "@/lib/tenant";
+import { REGIONS, regionConfig } from "@/lib/regions";
 
 // The practice psychotherapy rate is changed through changePracticeRate (rates/actions.ts)
 const settingsSchema = z.object({
+  region: z.enum(REGIONS),
   hourlyRateAdmin: z.coerce.number().min(0, "Must be 0 or greater"),
   hourlyRateWriting: z.coerce.number().min(0, "Must be 0 or greater"),
   cancellationNoticeHours: z.coerce.number().int().min(0).max(720, "At most 30 days"),
@@ -36,12 +38,25 @@ export async function updateSettings(data: SettingsFormData) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Invalid data" };
   }
 
+  // Switching region: pre-filled mentions that were never edited follow the new region
+  const current = await prisma.workspace.findUniqueOrThrow({
+    where: { id: userId },
+    select: { region: true, vatMention: true, paymentTerms: true },
+  });
+  const extra: { vatMention?: string; paymentTerms?: string } = {};
+  if (current.region !== parsed.data.region) {
+    const from = regionConfig(current.region);
+    const to = regionConfig(parsed.data.region);
+    if (!current.vatMention || current.vatMention === from.taxMention) extra.vatMention = to.taxMention;
+    if (!current.paymentTerms || current.paymentTerms === from.paymentTerms) extra.paymentTerms = to.paymentTerms;
+  }
+
   await prisma.workspace.update({
     where: { id: userId },
-    data: parsed.data,
+    data: { ...parsed.data, ...extra },
   });
 
-  revalidatePath("/dashboard/settings");
+  revalidatePath("/dashboard", "layout");
   return { success: true };
 }
 
@@ -91,6 +106,7 @@ export async function exportPatientData() {
     dateOfBirth: p.dateOfBirth?.toISOString().slice(0, 10) ?? null,
     gender: p.gender,
     pronouns: p.pronouns,
+    address: p.address,
     emergencyContact: {
       name: p.emergencyContactName,
       relation: p.emergencyContactRelation,

@@ -35,9 +35,11 @@ import { formatPhone } from "@/lib/phone";
 function PatientRowActions({
   patient,
   defaultTariffLabel,
+  region,
 }: {
   patient: PatientRow;
   defaultTariffLabel?: string;
+  region?: string;
 }) {
   const router = useRouter();
   const [editOpen, setEditOpen] = useState(false);
@@ -92,6 +94,7 @@ function PatientRowActions({
       <EditPatientSheet
         patient={patient}
         defaultTariffLabel={defaultTariffLabel}
+        region={region}
         open={editOpen}
         onOpenChange={setEditOpen}
       />
@@ -187,7 +190,7 @@ export const patientColumns: ColumnDef<PatientRow>[] = [
     cell: ({ row, table }) => (
       <PatientRowActions
         patient={row.original}
-        defaultTariffLabel={(table.options.meta as { defaultTariffLabel?: string } | undefined)?.defaultTariffLabel}
+        {...(table.options.meta as { defaultTariffLabel?: string; region?: string } | undefined)}
       />
     ),
   },

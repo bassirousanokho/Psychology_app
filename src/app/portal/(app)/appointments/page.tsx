@@ -86,7 +86,7 @@ export default async function PortalAppointmentsPage() {
                   <p className="text-xs text-muted-foreground">
                     {fmt(appt.startTime, "HH:mm")} – {fmt(appt.endTime, "HH:mm")} ·{" "}
                     {money(Number(appt.tariffAmount), ws.currency)}
-                    {appt.status === "CANCELLED" && appt.cancellationFee &&
+                    {(appt.status === "CANCELLED" || appt.status === "NO_SHOW") && appt.cancellationFee &&
                       ` · ${t("portal.feeCharged", { amount: money(Number(appt.cancellationFee), ws.currency) })}`}
                   </p>
                 </div>

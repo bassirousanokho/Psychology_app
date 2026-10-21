@@ -45,7 +45,7 @@ const STATUS_VARIANTS: Record<
   NO_SHOW: "destructive",
 };
 
-type Confirm = "cancel" | "delete" | null;
+type Confirm = "cancel" | "noshow" | "delete" | null;
 
 interface AppointmentDialogProps {
   appointment: CalendarAppointment | null;
@@ -228,6 +228,38 @@ function AppointmentPanel({
                 </label>
               )}
             </>
+          ) : confirm === "noshow" ? (
+            <>
+              <p className="text-sm">{t("panel.noShowQuestion", { name: patientName })}</p>
+              {!hourly && (
+                <div className="space-y-3 rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">{t("panel.noShowFeeHint")}</p>
+                  <label className="flex items-center gap-2 text-sm font-medium">
+                    <input
+                      type="checkbox"
+                      checked={chargeFee}
+                      onChange={(e) => setChargeFee(e.target.checked)}
+                      className="h-4 w-4"
+                    />
+                    {t("panel.chargeFee")}
+                  </label>
+                  {chargeFee && (
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={fee}
+                        onChange={(e) => setFee(e.target.value)}
+                        className="h-8 w-32"
+                        aria-label={t("panel.fee")}
+                      />
+                      <span className="text-sm text-muted-foreground">{availability.currency}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
           ) : (
             <p className="text-sm">{t("panel.deleteQuestion")}</p>
           )}
@@ -237,9 +269,17 @@ function AppointmentPanel({
             </Button>
             <Button
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              disabled={isPending || (confirm === "cancel" && !feeValid)}
+              disabled={isPending || ((confirm === "cancel" || confirm === "noshow") && !feeValid)}
               onClick={() =>
-                confirm === "cancel"
+                confirm === "noshow"
+                  ? run(
+                      () =>
+                        updateAppointmentStatus(appt.id, "NO_SHOW", {
+                          cancellationFee: !hourly && chargeFee ? feeValue : null,
+                        }),
+                      !hourly && chargeFee && feeValue > 0 ? t("panel.noShowWithFee") : t("panel.markedNoShow"),
+                    )
+                  : confirm === "cancel"
                   ? run(
                       async () => {
                         const result = await updateAppointmentStatus(appt.id, "CANCELLED", {
@@ -261,7 +301,11 @@ function AppointmentPanel({
               }
             >
               {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {confirm === "cancel" ? t("panel.cancelSession") : t("panel.deleteSession")}
+              {confirm === "cancel"
+                ? t("panel.cancelSession")
+                : confirm === "noshow"
+                ? t("panel.markNoShow")
+                : t("panel.deleteSession")}
             </Button>
           </div>
         </div>
@@ -284,7 +328,7 @@ function AppointmentPanel({
               variant="outline"
               className="w-full justify-start"
               disabled={isPending}
-              onClick={() => run(() => updateAppointmentStatus(appt.id, "NO_SHOW"), t("panel.markedNoShow"))}
+              onClick={() => setConfirm("noshow")}
             >
               <UserX className="mr-2 h-4 w-4" />
               {t("panel.markNoShow")}

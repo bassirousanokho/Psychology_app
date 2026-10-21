@@ -10,7 +10,7 @@ type Cancellable = {
 };
 
 export type CancellationStats = {
-  last30Days: number;
+  last30Days: number; // cancellations and no-shows (the alert)
   thisMonth: number;
   last12Months: number;
   withFee12Months: number;
@@ -46,6 +46,8 @@ export function cancellationStats(appts: Cancellable[], now = new Date()): Cance
         byMonth.set(key, m);
       }
     } else if (a.status === "NO_SHOW" && a.startTime >= since12 && a.startTime <= now) {
+      // No-shows count towards the alert too (on the session date)
+      if (a.startTime >= since30) stats.last30Days++;
       stats.noShows12Months++;
       const key = format(a.startTime, "yyyy-MM");
       const m = byMonth.get(key) ?? { cancellations: 0, noShows: 0 };

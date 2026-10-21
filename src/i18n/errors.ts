@@ -68,8 +68,8 @@ const EXACT: Record<string, string> = {
   "Failed to create invoice": "Impossible de créer la facture",
   "This invoice is already paid": "Cette facture est déjà payée",
   "A receipt can only be sent for a paid invoice": "Un reçu ne peut être envoyé que pour une facture payée",
-  "Only completed sessions or charged cancellations can be invoiced":
-    "Seules les séances terminées ou les annulations facturées peuvent être facturées",
+  "Only completed sessions, or cancellations and no-shows with a fee, can be invoiced":
+    "Seules les séances réalisées, ou les annulations et absences avec frais, peuvent être facturées",
   "No email provider is configured: the invoice was not sent":
     "Aucun service de courriel n'est configuré : la facture n'a pas été envoyée",
   "No email provider is configured: the receipt was not sent":

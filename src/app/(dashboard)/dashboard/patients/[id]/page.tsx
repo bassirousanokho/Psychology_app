@@ -379,7 +379,7 @@ export default async function PatientProfilePage({ params }: PageProps) {
                         {fmt(appt.startTime, "HH:mm")} –{" "}
                         {fmt(appt.endTime, "HH:mm")} ·{" "}
                         {money(Number(appt.tariffAmount))}
-                        {appt.status === "CANCELLED" &&
+                        {(appt.status === "CANCELLED" || appt.status === "NO_SHOW") &&
                           (appt.cancellationFee
                             ? ` · ${t("profile.feeCharged", { amount: money(Number(appt.cancellationFee)) })}`
                             : ` · ${t("profile.noFee")}`)}

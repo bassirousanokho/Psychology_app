@@ -133,7 +133,8 @@ export default async function AppointmentPage({ params }: PageProps) {
   const money = (n: number) => formatMoney(n, currency, localeOf(lang, raw.workspace.region));
   const price = Number(raw.tariffAmount);
   const fee = raw.cancellationFee !== null ? Number(raw.cancellationFee) : null;
-  const billable = raw.status === "COMPLETED" || (raw.status === "CANCELLED" && fee !== null && fee > 0);
+  const billable =
+    raw.status === "COMPLETED" || ((raw.status === "CANCELLED" || raw.status === "NO_SHOW") && fee !== null && fee > 0);
 
   const start    = new Date(appointment.startTime);
   const end      = new Date(appointment.endTime);
@@ -228,6 +229,17 @@ export default async function AppointmentPage({ params }: PageProps) {
                   : t("session.cancelled")}
                 {fee !== null && fee > 0 ? t("session.feeLine", { amount: money(fee) }) : t("session.noFee")}
                 .
+              </p>
+            </div>
+          )}
+
+          {/* ── No-show ── */}
+          {raw.status === "NO_SHOW" && (
+            <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50/60 px-5 py-3 text-sm dark:border-red-900 dark:bg-red-950/30">
+              <Ban className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
+              <p>
+                {t("session.noShow")}
+                {fee !== null && fee > 0 ? t("session.noShowFeeLine", { amount: money(fee) }) : t("session.noFee")}.
               </p>
             </div>
           )}

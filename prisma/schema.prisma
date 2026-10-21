@@ -248,6 +248,7 @@ model Appointment {
 
   // Cancellation: when, and the fee charged (null = no fee). The practitioner
   // decides whether a cancellation is late; charging a fee is the default.
+  // The fee also applies to a no-show (missed session).
   cancelledAt     DateTime?
   cancellationFee Decimal?  @db.Decimal(10, 2)
 

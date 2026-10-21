@@ -34,7 +34,8 @@ export function sessionLine(appt: BillableSession): DraftLine {
     return { ...base, description: `Frais d'annulation — séance du ${date}`, quantity: 1, unitPrice: fee };
   }
   if (appt.status === "NO_SHOW") {
-    return { ...base, description: `Absence sans préavis — séance du ${date}`, quantity: 1, unitPrice: Number(appt.tariffAmount) };
+    // The fee set when marking the no-show, else the session price
+    return { ...base, description: `Absence sans préavis — séance du ${date}`, quantity: 1, unitPrice: fee > 0 ? fee : Number(appt.tariffAmount) };
   }
   if (isHourly(appt.type)) {
     const minutes = differenceInMinutes(appt.endTime, appt.startTime);

@@ -279,8 +279,8 @@ export async function countFollowingInSeries(appointmentId: string): Promise<num
 // ── Status (cancel, no-show, restore) ────────────────────────────────────────
 
 /**
- * Cancel (optionally with a fee: the practitioner decides whether the
- * cancellation is late), mark no-show, or put back to scheduled. Completed
+ * Cancel or mark no-show, optionally with a fee (charged by default, the
+ * practitioner decides), or put back to scheduled. Completed
  * sessions are changed from the session page (Reopen), never from here.
  */
 export async function updateAppointmentStatus(
@@ -306,7 +306,7 @@ export async function updateAppointmentStatus(
     return { success: false, error: "A session can only be marked no-show once it has started" };
   }
   const fee = options.cancellationFee;
-  if (status === "CANCELLED" && fee != null && !(Number.isFinite(fee) && fee >= 0)) {
+  if (status !== "SCHEDULED" && fee != null && !(Number.isFinite(fee) && fee >= 0)) {
     return { success: false, error: "Enter a valid fee" };
   }
   if (status === "SCHEDULED" && !isHourly(appt.type)) {
@@ -325,6 +325,8 @@ export async function updateAppointmentStatus(
       data:
         status === "CANCELLED"
           ? { status, cancelledAt: new Date(), cancellationFee: fee && fee > 0 ? fee : null }
+          : status === "NO_SHOW"
+          ? { status, cancelledAt: null, cancellationFee: fee && fee > 0 ? fee : null }
           : { status, cancelledAt: null, cancellationFee: null },
     });
     revalidateAppointment(id);

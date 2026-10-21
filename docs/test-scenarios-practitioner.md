@@ -887,6 +887,15 @@ Recette now runs at **https://psy-app-804784013458.northamerica-northeast1.run.a
 - [ ] Inbox → Activité lists portal bookings, moves, cancellations (with late fee) and completed forms, each linking to the session or the answers. New items are highlighted once, then marked seen.
 - [ ] Settings → Messagerie → « M'envoyer aussi les événements par courriel » off: no more emails, the activity is still listed.
 
+## 19. No-shows charged like late cancellations (2026-10-25)
+
+- [ ] Calendar → a session that has started → **Absence**: asks « didn't come? » with « Charge a fee » ticked and the session price pre-filled; change the amount, or untick.
+- [ ] With a fee: the session page shows « Le patient ne s'est pas présenté · frais … » and the invoice panel (Mark paid / Generate invoice). The invoice line reads « Absence sans préavis — séance du … » at the fee.
+- [ ] Without a fee: no invoice panel (it can still be billed from Billing → New invoice).
+- [ ] Restore → Scheduled clears the fee.
+- [ ] Patient profile: the « Cancellations and no-shows » card counts no-shows in « Last 30 days »; the alert triggers on cancellations + no-shows. History shows « frais … » on no-shows.
+- [ ] Portal → Appointments shows the fee on a no-show.
+
 ---
 
 ## Suspected issues

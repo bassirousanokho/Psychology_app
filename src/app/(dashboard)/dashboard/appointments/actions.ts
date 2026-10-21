@@ -37,9 +37,9 @@ async function createInvoice(
   if (appointment.invoiceId) return { success: true, invoiceId: appointment.invoiceId };
 
   const fee = appointment.cancellationFee;
-  const chargedCancellation = appointment.status === "CANCELLED" && fee !== null && fee.gt(0);
-  if (appointment.status !== "COMPLETED" && !chargedCancellation) {
-    return { success: false, error: "Only completed sessions or charged cancellations can be invoiced" };
+  const charged = (appointment.status === "CANCELLED" || appointment.status === "NO_SHOW") && fee !== null && fee.gt(0);
+  if (appointment.status !== "COMPLETED" && !charged) {
+    return { success: false, error: "Only completed sessions, or cancellations and no-shows with a fee, can be invoiced" };
   }
 
   const result = await createInvoiceWithLines({

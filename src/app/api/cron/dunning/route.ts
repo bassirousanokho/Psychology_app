@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { sendInvoiceReminder } from "@/lib/email";
+import { formatLongDate, formatMoney, langOf, localeOf } from "@/lib/format";
 
 // Cloud Scheduler calls this route daily (see README "Deploying to GCP").
 // Guarded by CRON_SECRET to prevent public execution.
@@ -11,9 +12,10 @@ export async function GET(request: Request) {
   }
 
   const now = new Date();
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
   // 1. Mark overdue: SENT invoices whose dueDate has passed
-  await prisma.invoice.updateMany({
+  const marked = await prisma.invoice.updateMany({
     where: { status: "SENT", dueDate: { lt: now } },
     data: { status: "OVERDUE" },
   });
@@ -24,40 +26,41 @@ export async function GET(request: Request) {
   const overdue = await prisma.invoice.findMany({
     where: {
       status: "OVERDUE",
-      OR: [
-        { reminderSentAt: null },
-        { reminderSentAt: { lt: sevenDaysAgo } },
-      ],
+      patient: { deletedAt: null },
+      OR: [{ reminderSentAt: null }, { reminderSentAt: { lt: sevenDaysAgo } }],
     },
     include: {
       patient: { select: { firstName: true, lastName: true, email: true } },
-      workspace: { select: { name: true, currency: true } },
+      workspace: { select: { name: true, practitionerName: true, currency: true, region: true, language: true } },
     },
   });
 
   let sent = 0;
+  let failed = 0;
   for (const inv of overdue) {
     if (!inv.patient.email) continue;
-
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-
-    await sendInvoiceReminder({
-      to: inv.patient.email,
-      patientName: `${inv.patient.firstName} ${inv.patient.lastName}`,
-      invoiceNumber: inv.invoiceNumber,
-      totalAmount: Number(inv.totalAmount).toFixed(2),
-      currency: inv.workspace.currency,
-      dueDate: inv.dueDate.toLocaleDateString("en-GB"),
-      publicUrl: `${appUrl}/invoice/${inv.publicToken}`,
-    });
-
-    await prisma.invoice.update({
-      where: { id: inv.id },
-      data: { reminderSentAt: now },
-    });
-
-    sent++;
+    const lang = langOf(inv.workspace.language);
+    try {
+      const status = await sendInvoiceReminder({
+        lang,
+        to: inv.patient.email,
+        patientName: `${inv.patient.firstName} ${inv.patient.lastName}`,
+        practiceName: inv.workspace.practitionerName || inv.workspace.name,
+        invoiceNumber: inv.invoiceNumber,
+        total: formatMoney(Number(inv.totalAmount), inv.workspace.currency, localeOf(lang, inv.workspace.region)),
+        dueDate: formatLongDate(inv.dueDate, lang, inv.workspace.region),
+        publicUrl: `${appUrl}/invoice/${inv.publicToken}`,
+      });
+      // Only count it once an email actually went out
+      if (status === "SENT") {
+        await prisma.invoice.update({ where: { id: inv.id }, data: { reminderSentAt: now } });
+        sent++;
+      }
+    } catch (err) {
+      failed++;
+      console.error("[cron/dunning]", inv.id, err);
+    }
   }
 
-  return NextResponse.json({ marked: overdue.length, remindersSent: sent });
+  return NextResponse.json({ markedOverdue: marked.count, remindersSent: sent, failed });
 }

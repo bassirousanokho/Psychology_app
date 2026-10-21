@@ -9,6 +9,7 @@ import { PatientTable } from "@/components/patients/patient-table";
 import { CreatePatientButton } from "@/components/patients/patient-sheet";
 import { DeletedPatients } from "@/components/patients/deleted-patients";
 import { toPatientRow } from "@/components/patients/types";
+import { getI18n } from "@/i18n/server";
 
 export default async function PatientsPage({
   searchParams,
@@ -19,6 +20,7 @@ export default async function PatientsPage({
   if (!userId) redirect("/sign-in");
 
   const { q = "", view } = await searchParams;
+  const { t, tp } = await getI18n(userId);
 
   if (view === "deleted") {
     const deleted = await prisma.patient.findMany({
@@ -35,7 +37,7 @@ export default async function PatientsPage({
 
     return (
       <>
-        <Header title="Patients" />
+        <Header title={t("nav.patients")} />
         <main className="flex-1 p-6 space-y-6">
           <div>
             <Button
@@ -45,13 +47,10 @@ export default async function PatientsPage({
               render={<Link href="/dashboard/patients" />}
             >
               <ArrowLeft className="mr-1.5 h-4 w-4" />
-              Back to patients
+              {t("deleted.back")}
             </Button>
-            <h2 className="mt-2 text-lg font-semibold">Recently deleted</h2>
-            <p className="text-sm text-muted-foreground">
-              Deleted patients keep their history and invoices until you restore them or delete
-              them permanently.
-            </p>
+            <h2 className="mt-2 text-lg font-semibold">{t("deleted.title")}</h2>
+            <p className="text-sm text-muted-foreground">{t("deleted.description")}</p>
           </div>
           <DeletedPatients
             patients={deleted.map((p) => ({
@@ -84,14 +83,12 @@ export default async function PatientsPage({
 
   return (
     <>
-      <Header title="Patients" />
+      <Header title={t("nav.patients")} />
       <main className="flex-1 p-6 space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold">Patient records</h2>
-            <p className="text-sm text-muted-foreground">
-              {patients.length} patient{patients.length !== 1 ? "s" : ""} in this workspace
-            </p>
+            <h2 className="text-lg font-semibold">{t("patients.title")}</h2>
+            <p className="text-sm text-muted-foreground">{tp(patients.length, "patients.count")}</p>
           </div>
           <div className="flex items-center gap-2">
             {deletedCount > 0 && (
@@ -102,7 +99,7 @@ export default async function PatientsPage({
                 render={<Link href="/dashboard/patients?view=deleted" />}
               >
                 <Trash2 className="mr-1.5 h-4 w-4" />
-                Recently deleted ({deletedCount})
+                {t("patients.recentlyDeleted", { count: deletedCount })}
               </Button>
             )}
             <CreatePatientButton defaultTariffLabel={defaultTariffLabel} region={workspace?.region} />

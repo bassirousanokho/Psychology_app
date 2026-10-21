@@ -6,6 +6,7 @@ import { ensureWorkspace } from "@/lib/workspace";
 import { SettingsForm } from "@/components/settings/settings-form";
 import { InvoiceSettings } from "@/components/settings/invoice-settings";
 import { getSignedReadUrl } from "@/lib/gcs";
+import { toLang, translate } from "@/i18n/core";
 import { DEFAULT_REGION, REGIONS, type Region } from "@/lib/regions";
 
 export default async function SettingsPage() {
@@ -23,6 +24,10 @@ export default async function SettingsPage() {
       cancellationAlertThreshold: true,
       retentionYears: true,
       region: true,
+      language: true,
+      sessionRemindersEnabled: true,
+      gstRate: true,
+      qstRate: true,
       name: true,
       permitNumber: true,
       neq: true,
@@ -50,6 +55,11 @@ export default async function SettingsPage() {
   if (!workspace) redirect("/dashboard");
 
   const defaults = {
+    name: workspace.name,
+    language: (workspace.language === "en" ? "en" : "fr") as "fr" | "en",
+    sessionRemindersEnabled: workspace.sessionRemindersEnabled,
+    gstRate: Number(workspace.gstRate),
+    qstRate: Number(workspace.qstRate),
     hourlyRateAdmin: Number(workspace.hourlyRateAdmin),
     hourlyRateWriting: Number(workspace.hourlyRateWriting),
     cancellationNoticeHours: workspace.cancellationNoticeHours,
@@ -65,7 +75,7 @@ export default async function SettingsPage() {
 
   return (
     <>
-      <Header title="Settings" />
+      <Header title={translate(toLang(workspace.language), "nav.settings")} />
       <main className="flex-1 p-6">
         <div className="mx-auto max-w-2xl space-y-6">
           <SettingsForm

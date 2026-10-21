@@ -7,6 +7,7 @@ import { createPatient, updatePatient } from "@/app/(dashboard)/dashboard/patien
 import type { PatientFormData } from "@/lib/schemas";
 import { PatientForm } from "./patient-form";
 import { formatPhone } from "@/lib/phone";
+import { useI18n } from "@/i18n/client";
 import {
   Sheet,
   SheetContent,
@@ -28,15 +29,16 @@ export function CreatePatientButton({
 }) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const { t, tError } = useI18n();
 
   async function handleSubmit(data: PatientFormData) {
     startTransition(async () => {
       const result = await createPatient(data);
       if (result.success) {
-        toast.success("Patient created");
+        toast.success(t("patients.created"));
         setOpen(false);
       } else {
-        toast.error(result.error);
+        toast.error(tError(result.error));
       }
     });
   }
@@ -45,15 +47,15 @@ export function CreatePatientButton({
     <>
       <Button onClick={() => setOpen(true)}>
         <UserPlus className="mr-2 h-4 w-4" />
-        New patient
+        {t("patients.new")}
       </Button>
 
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent className="sm:max-w-md overflow-y-auto">
           <SheetHeader>
-            <SheetTitle>New patient</SheetTitle>
+            <SheetTitle>{t("patients.new")}</SheetTitle>
             <SheetDescription>
-              Add a new patient to your workspace.
+              {t("patients.newDescription")}
             </SheetDescription>
           </SheetHeader>
           <div className="mt-6">
@@ -83,15 +85,16 @@ interface EditPatientSheetProps {
 
 export function EditPatientSheet({ patient, defaultTariffLabel, region, open, onOpenChange }: EditPatientSheetProps) {
   const [isPending, startTransition] = useTransition();
+  const { t, tError } = useI18n();
 
   async function handleSubmit(data: PatientFormData) {
     startTransition(async () => {
       const result = await updatePatient(patient.id, data);
       if (result.success) {
-        toast.success("Patient updated");
+        toast.success(t("patients.updated"));
         onOpenChange(false);
       } else {
-        toast.error(result.error);
+        toast.error(tError(result.error));
       }
     });
   }
@@ -100,9 +103,9 @@ export function EditPatientSheet({ patient, defaultTariffLabel, region, open, on
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="sm:max-w-md overflow-y-auto">
         <SheetHeader>
-          <SheetTitle>Edit patient</SheetTitle>
+          <SheetTitle>{t("patients.editTitle")}</SheetTitle>
           <SheetDescription>
-            Update {patient.firstName} {patient.lastName}&apos;s record.
+            {t("patients.editDescription", { name: `${patient.firstName} ${patient.lastName}` })}
           </SheetDescription>
         </SheetHeader>
         <div className="mt-6">
@@ -124,6 +127,7 @@ export function EditPatientSheet({ patient, defaultTariffLabel, region, open, on
               doctorName: patient.doctorName ?? "",
               doctorPhone: formatPhone(patient.doctorPhone) ?? "",
               tariff: patient.tariff != null ? String(patient.tariff) : "",
+              remindersEnabled: patient.remindersEnabled,
               backgroundNotes: patient.backgroundNotes ?? "",
             }}
             onSubmit={handleSubmit}

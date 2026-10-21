@@ -11,6 +11,8 @@ import { Header } from "@/components/layout/header";
 import prisma from "@/lib/prisma";
 import { ensureWorkspace } from "@/lib/workspace";
 import { decrypt } from "@/lib/crypto";
+import { makeI18n, toLang } from "@/i18n/core";
+import { formatMoney, localeOf } from "@/lib/format";
 import { getReminders } from "@/lib/reminders";
 import { Reminders } from "@/components/dashboard/reminders";
 import {
@@ -52,7 +54,10 @@ export default async function DashboardPage() {
   ] = await Promise.all([
     currentUser(),
 
-    prisma.workspace.findUnique({ where: { id: userId }, select: { name: true, currency: true } }),
+    prisma.workspace.findUnique({
+      where: { id: userId },
+      select: { name: true, currency: true, language: true, region: true },
+    }),
 
     // ── Today's appointments with patient + previous session note ────────────
     prisma.appointment.findMany({
@@ -172,55 +177,59 @@ export default async function DashboardPage() {
   const hoursWorked = completedAppts
     .reduce((acc, a) => acc + differenceInMinutes(a.endTime, a.startTime), 0) / 60;
 
-  const unpaidTotal   = Number(unpaidAgg._sum.totalAmount ?? 0).toFixed(2);
-  const revenueTotal  = Number(revenueAgg._sum.totalAmount ?? 0).toFixed(2);
-  const currency      = workspace?.currency ?? "EUR";
+  const { t, tp } = makeI18n(toLang(workspace?.language));
+  const locale        = localeOf(toLang(workspace?.language), workspace?.region);
+  const currency      = workspace?.currency ?? "CAD";
+  const unpaidTotal   = formatMoney(Number(unpaidAgg._sum.totalAmount ?? 0), currency, locale);
+  const revenueTotal  = formatMoney(Number(revenueAgg._sum.totalAmount ?? 0), currency, locale);
 
   const stats = [
     {
-      label: "Total Patients",
+      label: t("overview.stat.patients"),
       value: String(totalPatients),
       icon: Users,
-      description: "Active in this workspace",
+      description: t("overview.stat.patientsHint"),
     },
     {
-      label: "Sessions this month",
+      label: t("overview.stat.sessions"),
       value: String(completedAppts.length),
       icon: CalendarDays,
-      description: "Completed sessions",
+      description: t("overview.stat.sessionsHint"),
     },
     {
-      label: "Hours worked",
-      value: hoursWorked.toFixed(1),
+      label: t("overview.stat.hours"),
+      value: hoursWorked.toLocaleString(locale, { maximumFractionDigits: 1, minimumFractionDigits: 1 }),
       icon: Clock,
-      description: "This month",
+      description: t("overview.stat.hoursHint"),
     },
     {
-      label: "Unpaid invoices",
-      value: `${unpaidTotal} ${currency}`,
+      label: t("overview.stat.unpaid"),
+      value: unpaidTotal,
       icon: Receipt,
-      description: "Total outstanding",
+      description: t("overview.stat.unpaidHint"),
     },
     {
-      label: "Revenue",
-      value: `${revenueTotal} ${currency}`,
+      label: t("overview.stat.revenue"),
+      value: revenueTotal,
       icon: TrendingUp,
-      description: "Received this month",
+      description: t("overview.stat.revenueHint"),
     },
     {
-      label: "Missing notes",
+      label: t("overview.stat.missing"),
       value: String(pendingAppointments.length),
       icon: AlertTriangle,
-      description: "Sessions without notes",
+      description: t("overview.stat.missingHint"),
       highlight: pendingAppointments.length > 0,
     },
   ];
 
-  const firstName = clerkUser?.firstName ?? "there";
+  const firstName = clerkUser?.firstName ?? t("overview.greeting.fallbackName");
+  const greetingKey =
+    now.getHours() < 12 ? "overview.greeting.morning" : now.getHours() < 18 ? "overview.greeting.afternoon" : "overview.greeting.evening";
 
   return (
     <>
-      <Header title="Overview" />
+      <Header title={t("nav.overview")} />
 
       <main className="flex-1 p-6 space-y-6">
         {/* ── Welcome banner ── */}
@@ -229,12 +238,10 @@ export default async function DashboardPage() {
             {workspace?.name}
           </p>
           <h2 className="mt-0.5 text-xl font-semibold">
-            Good{now.getHours() < 12 ? " morning" : now.getHours() < 18 ? " afternoon" : " evening"},{" "}
-            {firstName}.
+            {t(greetingKey, { name: firstName }).replace(/\s+\./, ".")}
             {pendingAppointments.length > 0 && (
               <span className="ml-2 text-base font-normal text-amber-600 dark:text-amber-400">
-                {pendingAppointments.length} session
-                {pendingAppointments.length !== 1 ? "s" : ""} still need notes.
+                {tp(pendingAppointments.length, "overview.needNotes")}
               </span>
             )}
           </h2>

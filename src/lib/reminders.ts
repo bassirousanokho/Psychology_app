@@ -1,6 +1,7 @@
 import { subDays, subYears } from "date-fns";
 import prisma from "@/lib/prisma";
 import { ALERT_WINDOW_DAYS } from "@/lib/cancellations";
+import { langOf, localeOf } from "@/lib/format";
 import type { RemindersData } from "@/components/dashboard/reminders";
 
 const MAX_PER_SECTION = 20;
@@ -9,7 +10,7 @@ const MAX_PER_SECTION = 20;
 export async function getReminders(workspaceId: string): Promise<RemindersData> {
   const workspace = await prisma.workspace.findUniqueOrThrow({
     where: { id: workspaceId },
-    select: { currency: true, retentionYears: true, cancellationAlertThreshold: true },
+    select: { currency: true, region: true, language: true, retentionYears: true, cancellationAlertThreshold: true },
   });
   const now = new Date();
   const retentionCutoff = subYears(now, workspace.retentionYears);
@@ -65,6 +66,7 @@ export async function getReminders(workspaceId: string): Promise<RemindersData> 
 
   return {
     currency: workspace.currency,
+    locale: localeOf(langOf(workspace.language), workspace.region),
     retentionYears: workspace.retentionYears,
     cancellationThreshold: workspace.cancellationAlertThreshold,
     rateChanges: rateChanges.map((c) => ({

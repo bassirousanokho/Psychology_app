@@ -1,19 +1,20 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { format, addDays, isToday } from "date-fns";
+import { format } from "date-fns";
 import { toast } from "sonner";
 import { Loader2, CalendarDays } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { bookAppointment } from "@/app/portal/actions";
+import { useI18n } from "@/i18n/client";
 
 interface BookingSlotsProps {
   workingDays: number[];        // 1=Mon … 7=Sun
   workingHoursStart: string;    // "HH:mm"
   workingHoursEnd: string;      // "HH:mm"
-  /** Map from YYYY-MM-DD → array of booked start hours */
-  bookedByDate: Record<string, number[]>;
+  /** Map from YYYY-MM-DD → busy [startMinute, endMinute] ranges from local midnight */
+  busyByDate: Record<string, [number, number][]>;
 }
 
 function isoDay(d: Date): number {
@@ -28,11 +29,12 @@ export function BookingSlots({
   workingDays,
   workingHoursStart,
   workingHoursEnd,
-  bookedByDate,
+  busyByDate,
 }: BookingSlotsProps) {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedHour, setSelectedHour] = useState<number | null>(null);
   const [isPending, startTransition] = useTransition();
+  const { t, fmt, tError } = useI18n();
 
   const startHour = parseInt(workingHoursStart.split(":")[0]);
   const endHour   = parseInt(workingHoursEnd.split(":")[0]);
@@ -55,7 +57,9 @@ export function BookingSlots({
   for (let h = startHour; h < endHour; h++) slots.push(h);
 
   const dateKey = selectedDate ? toDateKey(selectedDate) : null;
-  const booked = dateKey ? (bookedByDate[dateKey] ?? []) : [];
+  const busy = dateKey ? (busyByDate[dateKey] ?? []) : [];
+  // A 60-min slot is taken if any session overlaps it, e.g. 10:30–11:30 blocks 10:00 and 11:00
+  const isTaken = (h: number) => busy.some(([s, e]) => s < (h + 1) * 60 && e > h * 60);
 
   function handleBook() {
     if (!selectedDate || selectedHour === null) return;
@@ -65,7 +69,7 @@ export function BookingSlots({
         hour: selectedHour,
       });
       if (result && !result.success) {
-        toast.error(result.error);
+        toast.error(tError(result.error));
       }
       // On success, the server action redirects automatically
     });
@@ -76,7 +80,7 @@ export function BookingSlots({
       {/* Date picker */}
       <div>
         <p className="mb-3 text-sm font-medium text-muted-foreground uppercase tracking-wide text-xs">
-          Select a date
+          {t("portal.selectDate")}
         </p>
         <div className="flex flex-wrap gap-2">
           {availableDates.map((d) => {
@@ -93,9 +97,9 @@ export function BookingSlots({
                     : "border-input bg-background hover:bg-muted",
                 )}
               >
-                <span className="font-medium">{format(d, "EEE")}</span>
+                <span className="font-medium">{fmt(d, "EEE")}</span>
                 <br />
-                <span className="text-xs">{format(d, "d MMM")}</span>
+                <span className="text-xs">{fmt(d, "d MMM")}</span>
               </button>
             );
           })}
@@ -106,14 +110,14 @@ export function BookingSlots({
       {selectedDate && (
         <div>
           <p className="mb-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-            Available times — {format(selectedDate, "EEEE d MMMM")}
+            {t("portal.availableTimes", { date: fmt(selectedDate, "EEEE d MMMM") })}
           </p>
           {slots.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No slots defined for this workspace.</p>
+            <p className="text-sm text-muted-foreground">{t("portal.noSlots")}</p>
           ) : (
             <div className="flex flex-wrap gap-2">
               {slots.map((h) => {
-                const taken = booked.includes(h);
+                const taken = isTaken(h);
                 const active = selectedHour === h;
                 return (
                   <button
@@ -144,17 +148,17 @@ export function BookingSlots({
             <CalendarDays className="h-4 w-4 text-muted-foreground" />
             <div>
               <p className="text-sm font-medium">
-                {format(selectedDate, "EEEE d MMMM yyyy")}
+                {fmt(selectedDate, "EEEE d MMMM yyyy")}
               </p>
               <p className="text-xs text-muted-foreground">
                 {String(selectedHour).padStart(2, "0")}:00 –{" "}
-                {String(selectedHour + 1).padStart(2, "0")}:00 · 60 min
+                {String(selectedHour + 1).padStart(2, "0")}:00 · {t("portal.duration60")}
               </p>
             </div>
           </div>
           <Button onClick={handleBook} disabled={isPending}>
             {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Confirm booking
+            {t("portal.confirmBooking")}
           </Button>
         </div>
       )}

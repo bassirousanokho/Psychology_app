@@ -2,6 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { startOfWeek, endOfWeek, format } from "date-fns";
 import { Header } from "@/components/layout/header";
+import { getI18n } from "@/i18n/server";
 import prisma from "@/lib/prisma";
 import { WeekCalendar, type CalendarAppointment } from "@/components/calendar/week-calendar";
 import { BookAppointmentButton, type Availability } from "@/components/calendar/booking-dialog";
@@ -75,21 +76,21 @@ export default async function CalendarPage({ searchParams }: CalendarPageProps) 
     type: a.type,
     price: Number(a.tariffAmount),
     invoiced: a.invoice !== null,
+    seriesId: a.seriesId,
     patient: a.patient,
   }));
 
   const patients: PatientOption[] = rawPatients;
+  const { t, tp } = await getI18n(userId);
 
   return (
     <>
-      <Header title="Calendar" />
+      <Header title={t("nav.calendar")} />
       <main className="flex-1 p-6 space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold">Weekly schedule</h2>
-            <p className="text-sm text-muted-foreground">
-              {appointments.length} appointment{appointments.length !== 1 ? "s" : ""} this week
-            </p>
+            <h2 className="text-lg font-semibold">{t("calendar.weekly")}</h2>
+            <p className="text-sm text-muted-foreground">{tp(appointments.length, "calendar.count")}</p>
           </div>
           <BookAppointmentButton patients={patients} availability={availability} />
         </div>

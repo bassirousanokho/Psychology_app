@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { EditPatientSheet } from "./patient-sheet";
 import { formatPhone } from "@/lib/phone";
+import { T, useI18n } from "@/i18n/client";
 
 // ── Row actions cell ──────────────────────────────────────────────────────────
 
@@ -45,14 +46,15 @@ function PatientRowActions({
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const { t, tError } = useI18n();
 
   function handleDelete() {
     startTransition(async () => {
       const result = await deletePatient(patient.id);
       if (result.success) {
-        toast.success("Patient deleted");
+        toast.success(t("patients.deleted"));
       } else {
-        toast.error(result.error);
+        toast.error(tError(result.error));
       }
       setDeleteOpen(false);
     });
@@ -65,28 +67,28 @@ function PatientRowActions({
           render={<Button variant="ghost" size="icon" className="h-8 w-8" />}
         >
           <MoreHorizontal className="h-4 w-4" />
-          <span className="sr-only">Open actions</span>
+          <span className="sr-only">{t("patients.actions")}</span>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           {/* Base UI requires group labels to sit inside a group, or the menu crashes on open */}
           <DropdownMenuGroup>
-            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+            <DropdownMenuLabel>{t("patients.actions")}</DropdownMenuLabel>
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => router.push(`/dashboard/patients/${patient.id}`)}>
             <User className="mr-2 h-4 w-4" />
-            View profile
+            {t("patients.viewProfile")}
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setEditOpen(true)}>
             <Pencil className="mr-2 h-4 w-4" />
-            Edit
+            {t("patients.edit")}
           </DropdownMenuItem>
           <DropdownMenuItem
             className="text-destructive focus:text-destructive"
             onClick={() => setDeleteOpen(true)}
           >
             <Trash2 className="mr-2 h-4 w-4" />
-            Delete
+            {t("patients.delete")}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -102,23 +104,19 @@ function PatientRowActions({
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete patient?</AlertDialogTitle>
+            <AlertDialogTitle>{t("patients.deleteTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              <strong>
-                {patient.firstName} {patient.lastName}
-              </strong>{" "}
-              moves to Recently deleted: history and invoices are kept, upcoming sessions are
-              cancelled and portal access stops. You can restore them from there.
+              {t("patients.deleteBody", { name: `${patient.firstName} ${patient.lastName}` })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={handleDelete}
               disabled={isPending}
             >
-              Delete
+              {t("patients.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -131,6 +129,11 @@ function PatientRowActions({
 
 const collator = new Intl.Collator("fr", { sensitivity: "base", numeric: true });
 
+function DateCell({ date }: { date: Date }) {
+  const { fmt } = useI18n();
+  return <>{fmt(date, "d MMM yyyy")}</>;
+}
+
 /** Accent- and case-insensitive text sort; empty values always last. */
 const textSort: SortingFn<PatientRow> = (a, b, columnId) =>
   collator.compare(a.getValue<string>(columnId) ?? "", b.getValue<string>(columnId) ?? "");
@@ -139,7 +142,7 @@ export const patientColumns: ColumnDef<PatientRow>[] = [
   {
     accessorFn: (row) => `${row.lastName} ${row.firstName}`,
     id: "name",
-    header: "Name",
+    header: () => <T k="patients.col.name" />,
     sortingFn: textSort,
     cell: ({ row }) => (
       <span className="font-medium">
@@ -151,7 +154,7 @@ export const patientColumns: ColumnDef<PatientRow>[] = [
     // undefined (not null) so sortUndefined can push empty emails to the bottom
     accessorFn: (row) => row.email ?? undefined,
     id: "email",
-    header: "Email",
+    header: () => <T k="patients.col.email" />,
     sortingFn: textSort,
     sortUndefined: "last",
     cell: ({ getValue }) => {
@@ -168,7 +171,7 @@ export const patientColumns: ColumnDef<PatientRow>[] = [
   {
     accessorFn: (row) => formatPhone(row.phone) ?? undefined,
     id: "phone",
-    header: "Phone",
+    header: () => <T k="patients.col.phone" />,
     sortingFn: textSort,
     sortUndefined: "last",
     cell: ({ getValue }) =>
@@ -177,12 +180,9 @@ export const patientColumns: ColumnDef<PatientRow>[] = [
   {
     accessorFn: (row) => row.createdAt,
     id: "since",
-    header: "Patient since",
+    header: () => <T k="patients.col.since" />,
     sortingFn: "datetime",
-    cell: ({ getValue }) =>
-      new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium" }).format(
-        getValue<Date>(),
-      ),
+    cell: ({ getValue }) => <DateCell date={getValue<Date>()} />,
   },
   {
     id: "actions",

@@ -2,8 +2,9 @@ import { notFound } from "next/navigation";
 import { differenceInMinutes, format } from "date-fns";
 import { fr, frCA } from "date-fns/locale";
 import { formatDuration, isHourly, SESSION_TYPE_INVOICE_LABELS } from "@/lib/session-types";
-import { formatLegalValue } from "@/lib/invoice-legal";
+import { IssuerBlock } from "@/components/billing/issuer-block";
 import { regionConfig } from "@/lib/regions";
+import type { TaxLine } from "@/lib/taxes";
 import { getSignedReadUrl } from "@/lib/gcs";
 import prisma from "@/lib/prisma";
 import { PrintButton } from "@/components/billing/print-button";
@@ -61,6 +62,7 @@ export default async function PublicInvoicePage({ params }: PageProps) {
   const totalAmount = Number(invoice.totalAmount);
   const taxRate = Number(invoice.taxRate);
   const isReceipt = invoice.status === "PAID" && invoice.paidAt !== null;
+  const taxLines = Array.isArray(invoice.taxLines) ? (invoice.taxLines as unknown as TaxLine[]) : null;
 
   const [headerUrl, footerUrl] = await Promise.all([
     ws.invoiceHeaderKey ? getSignedReadUrl(ws.invoiceHeaderKey) : null,
@@ -80,7 +82,6 @@ export default async function PublicInvoicePage({ params }: PageProps) {
     }
   }
 
-  const practitionerName = ws.practitionerName || ws.name;
 
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4 print:bg-white print:p-0">
@@ -93,20 +94,7 @@ export default async function PublicInvoicePage({ params }: PageProps) {
 
         {/* Practitioner (issuer) + document title */}
         <div className="flex justify-between items-start gap-6 mb-8">
-          <div className="text-sm leading-relaxed">
-            <p className="text-lg font-bold">{practitionerName}</p>
-            {ws.professionalTitle && <p className="text-gray-600">{ws.professionalTitle}</p>}
-            {ws.address && <p className="whitespace-pre-line text-gray-600">{ws.address}</p>}
-            <div className="mt-2 space-y-0.5 text-xs text-gray-500">
-              {cfg.legalFields.map((f) =>
-                ws[f.key] ? (
-                  <p key={f.key}>
-                    {f.invoiceLabel} : {formatLegalValue(f.key, ws[f.key]!)}
-                  </p>
-                ) : null,
-              )}
-            </div>
-          </div>
+          <IssuerBlock workspace={ws} />
           <div className="text-right shrink-0">
             <p className="text-xs text-gray-400 uppercase tracking-widest">
               {isReceipt ? cfg.receiptTitle : cfg.invoiceTitle}
@@ -166,12 +154,24 @@ export default async function PublicInvoicePage({ params }: PageProps) {
                   </td>
                   <td className="pt-3 text-right tabular-nums text-gray-400">{money.format(amount)}</td>
                 </tr>
-                <tr>
-                  <td className="pt-1 text-right text-gray-400 pr-8">
-                    {ws.region === "FR" ? "TVA" : "Taxes"} ({taxRate.toLocaleString(cfg.locale, { maximumFractionDigits: 3 })} %)
-                  </td>
-                  <td className="pt-1 text-right tabular-nums text-gray-400">{money.format(taxAmount)}</td>
-                </tr>
+                {taxLines ? (
+                  // Québec: TPS and TVQ on separate lines
+                  taxLines.map((l) => (
+                    <tr key={l.label}>
+                      <td className="pt-1 text-right text-gray-400 pr-8">
+                        {l.label} ({l.rate.toLocaleString(cfg.locale, { maximumFractionDigits: 3 })} %)
+                      </td>
+                      <td className="pt-1 text-right tabular-nums text-gray-400">{money.format(l.amount)}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td className="pt-1 text-right text-gray-400 pr-8">
+                      {ws.region === "FR" ? "TVA" : "Taxes"} ({taxRate.toLocaleString(cfg.locale, { maximumFractionDigits: 3 })} %)
+                    </td>
+                    <td className="pt-1 text-right tabular-nums text-gray-400">{money.format(taxAmount)}</td>
+                  </tr>
+                )}
               </>
             )}
             <tr>

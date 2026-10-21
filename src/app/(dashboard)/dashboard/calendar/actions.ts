@@ -6,7 +6,15 @@ import prisma from "@/lib/prisma";
 import { decrypt } from "@/lib/crypto";
 import { psychotherapyRate } from "@/lib/rates";
 import { appointmentSchema, type AppointmentFormData } from "@/lib/schemas";
-import { HOURLY_STEP_MIN, hourlyAmount, isHourly } from "@/lib/session-types";
+import { randomUUID } from "crypto";
+import { addWeeks } from "date-fns";
+import {
+  HOURLY_STEP_MIN,
+  MAX_OCCURRENCES,
+  hourlyAmount,
+  isHourly,
+  type SessionType,
+} from "@/lib/session-types";
 
 type ActionResult = { success: true } | { success: false; error: string };
 
@@ -105,6 +113,167 @@ export async function createAppointment(data: AppointmentFormData): Promise<Acti
     console.error("[createAppointment]", err);
     return { success: false, error: "Failed to create appointment" };
   }
+}
+
+// ── Recurring sessions ───────────────────────────────────────────────────────
+
+export type SeriesOccurrence = { start: string; end: string; conflict: string | null };
+
+/** Dates of a weekly / fortnightly series, each checked against existing therapy sessions. */
+async function planSeries(
+  workspaceId: string,
+  type: SessionType,
+  start: Date,
+  end: Date,
+  everyWeeks: number,
+  count: number,
+): Promise<SeriesOccurrence[]> {
+  const occurrences: SeriesOccurrence[] = [];
+  for (let i = 0; i < count; i++) {
+    // addWeeks keeps the local time across daylight-saving changes
+    const s = addWeeks(start, i * everyWeeks);
+    const e = addWeeks(end, i * everyWeeks);
+    const conflict = isHourly(type) ? null : await findConflict(workspaceId, s, e);
+    occurrences.push({
+      start: s.toISOString(),
+      end: e.toISOString(),
+      conflict: conflict ? `${conflict.patient.firstName} ${conflict.patient.lastName}` : null,
+    });
+  }
+  return occurrences;
+}
+
+function validSeries(everyWeeks: number, count: number) {
+  return (everyWeeks === 1 || everyWeeks === 2) && Number.isInteger(count) && count >= 2 && count <= MAX_OCCURRENCES;
+}
+
+/** Preview of a recurring booking: every date, with the session it would clash with. */
+export async function previewSeries(
+  data: AppointmentFormData,
+  everyWeeks: number,
+  count: number,
+): Promise<{ success: true; occurrences: SeriesOccurrence[] } | { success: false; error: string }> {
+  const parsed = appointmentSchema.safeParse(data);
+  if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? "Invalid data" };
+  if (!validSeries(everyWeeks, count)) return { success: false, error: `Choose 2 to ${MAX_OCCURRENCES} sessions` };
+  const { userId } = await auth();
+  if (!userId) return { success: false, error: "Not authenticated" };
+
+  const { type, startTime, endTime } = parsed.data;
+  return {
+    success: true,
+    occurrences: await planSeries(userId, type, new Date(startTime), new Date(endTime), everyWeeks, count),
+  };
+}
+
+/** Books a series; dates that clash with an existing therapy session are skipped. */
+export async function createAppointmentSeries(
+  data: AppointmentFormData,
+  everyWeeks: number,
+  count: number,
+): Promise<{ success: true; created: number; skipped: string[] } | { success: false; error: string }> {
+  const parsed = appointmentSchema.safeParse(data);
+  if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? "Invalid data" };
+  if (!validSeries(everyWeeks, count)) return { success: false, error: `Choose 2 to ${MAX_OCCURRENCES} sessions` };
+  const { userId } = await auth();
+  if (!userId) return { success: false, error: "Not authenticated" };
+
+  const { patientId, type, startTime, endTime } = parsed.data;
+  const patient = await prisma.patient.findFirst({
+    where: { id: patientId, workspaceId: userId, deletedAt: null },
+    select: { id: true },
+  });
+  if (!patient) return { success: false, error: "Patient not found in this workspace" };
+
+  const start = new Date(startTime);
+  const end = new Date(endTime);
+  const minutes = minutesBetween(start, end);
+  if (isHourly(type) && minutes % HOURLY_STEP_MIN !== 0) {
+    return { success: false, error: "Time spent must be in half-hour steps" };
+  }
+
+  const workspace = await prisma.workspace.findUniqueOrThrow({
+    where: { id: userId },
+    select: { taxRate: true, hourlyRateAdmin: true, hourlyRateWriting: true },
+  });
+  const hourlyRate = isHourly(type)
+    ? Number(type === "ADMIN" ? workspace.hourlyRateAdmin : workspace.hourlyRateWriting)
+    : undefined;
+
+  const plan = await planSeries(userId, type, start, end, everyWeeks, count);
+  const free = plan.filter((o) => !o.conflict);
+  if (free.length === 0) return { success: false, error: "Every date in this series clashes with another session" };
+
+  const seriesId = randomUUID();
+  try {
+    await prisma.appointment.createMany({
+      data: await Promise.all(
+        free.map(async (o) => ({
+          workspaceId: userId,
+          patientId,
+          practitionerId: userId,
+          type,
+          startTime: new Date(o.start),
+          endTime: new Date(o.end),
+          seriesId,
+          taxRate: workspace.taxRate,
+          ...(hourlyRate !== undefined
+            ? { tariffAmount: hourlyAmount(hourlyRate, minutes), hourlyRate }
+            : // Each date uses the patient's rate on that date (scheduled changes included)
+              { tariffAmount: await psychotherapyRate(patientId, new Date(o.start)) }),
+        })),
+      ),
+    });
+  } catch (err) {
+    console.error("[createAppointmentSeries]", err);
+    return { success: false, error: "Failed to create the series" };
+  }
+
+  revalidatePath("/dashboard/calendar");
+  return { success: true, created: free.length, skipped: plan.filter((o) => o.conflict).map((o) => o.start) };
+}
+
+/**
+ * Cancels the scheduled sessions of a series after the given one (no fee: a fee,
+ * if any, applies to the session being cancelled itself). Returns how many.
+ */
+export async function cancelFollowingInSeries(appointmentId: string): Promise<{ success: true; count: number } | { success: false; error: string }> {
+  const { userId } = await auth();
+  if (!userId) return { success: false, error: "Not authenticated" };
+
+  const appt = await prisma.appointment.findFirst({
+    where: { id: appointmentId, workspaceId: userId },
+    select: { seriesId: true, startTime: true },
+  });
+  if (!appt?.seriesId) return { success: false, error: "This session is not part of a series" };
+
+  const result = await prisma.appointment.updateMany({
+    where: {
+      workspaceId: userId,
+      seriesId: appt.seriesId,
+      startTime: { gt: appt.startTime },
+      status: "SCHEDULED",
+      invoice: null,
+    },
+    data: { status: "CANCELLED", cancelledAt: new Date(), cancellationFee: null },
+  });
+  revalidatePath("/dashboard/calendar");
+  revalidatePath("/dashboard");
+  return { success: true, count: result.count };
+}
+
+/** Scheduled sessions of the same series after this one (for the cancel dialog). */
+export async function countFollowingInSeries(appointmentId: string): Promise<number> {
+  const { userId } = await auth();
+  if (!userId) return 0;
+  const appt = await prisma.appointment.findFirst({
+    where: { id: appointmentId, workspaceId: userId },
+    select: { seriesId: true, startTime: true },
+  });
+  if (!appt?.seriesId) return 0;
+  return prisma.appointment.count({
+    where: { seriesId: appt.seriesId, startTime: { gt: appt.startTime }, status: "SCHEDULED", invoice: null },
+  });
 }
 
 // ── Status (cancel, no-show, restore) ────────────────────────────────────────

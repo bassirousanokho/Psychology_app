@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useI18n } from "@/i18n/client";
 import {
   Dialog,
   DialogContent,
@@ -22,19 +23,17 @@ import {
 
 export function ChangeRateDialog({ currentRate, currency }: { currentRate: number; currency: string }) {
   const [open, setOpen] = useState(false);
+  const { t } = useI18n();
   return (
     <>
       <Button type="button" variant="outline" size="sm" onClick={() => setOpen(true)}>
-        Change rate…
+        {t("changeRate.button")}
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Change the practice rate</DialogTitle>
-            <DialogDescription>
-              Choose which patients move to the new rate and from when. You&apos;ll get a reminder to
-              inform each of them. Sessions already booked keep their price.
-            </DialogDescription>
+            <DialogTitle>{t("changeRate.title")}</DialogTitle>
+            <DialogDescription>{t("changeRate.body")}</DialogDescription>
           </DialogHeader>
           {open && (
             <ChangeRateForm
@@ -65,6 +64,7 @@ function ChangeRateForm({
   const [candidates, setCandidates] = useState<RateCandidate[] | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [isPending, startTransition] = useTransition();
+  const { t, tp, tError, money } = useI18n();
 
   useEffect(() => {
     getRateCandidates().then((rows) => {
@@ -97,14 +97,10 @@ function ChangeRateForm({
         patientIds: [...selected],
       });
       if (result.success) {
-        toast.success(
-          selected.size > 0
-            ? `New rate scheduled for ${selected.size} patient${selected.size !== 1 ? "s" : ""}`
-            : "Practice rate updated",
-        );
+        toast.success(selected.size > 0 ? tp(selected.size, "changeRate.scheduled") : t("changeRate.updated"));
         onDone();
       } else {
-        toast.error(result.error);
+        toast.error(tError(result.error));
       }
     });
   }
@@ -113,7 +109,7 @@ function ChangeRateForm({
     <div className="space-y-5 pt-2">
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
-          <Label htmlFor="new-rate">New rate ({currency})</Label>
+          <Label htmlFor="new-rate">{t("changeRate.newRate", { currency })}</Label>
           <Input
             id="new-rate"
             type="number"
@@ -124,7 +120,7 @@ function ChangeRateForm({
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="effective-from">For selected patients, from</Label>
+          <Label htmlFor="effective-from">{t("changeRate.from")}</Label>
           <Input
             id="effective-from"
             type="date"
@@ -136,7 +132,7 @@ function ChangeRateForm({
 
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <Label>Patients moving to the new rate</Label>
+          <Label>{t("changeRate.patients")}</Label>
           {candidates && candidates.length > 0 && (
             <div className="flex gap-2 text-xs">
               <button
@@ -144,14 +140,14 @@ function ChangeRateForm({
                 className="underline underline-offset-2"
                 onClick={() => setSelected(new Set(candidates.map((c) => c.id)))}
               >
-                All
+                {t("common.all")}
               </button>
               <button
                 type="button"
                 className="underline underline-offset-2"
                 onClick={() => setSelected(new Set())}
               >
-                None
+                {t("common.none")}
               </button>
             </div>
           )}
@@ -160,10 +156,10 @@ function ChangeRateForm({
         {candidates === null ? (
           <p className="flex items-center gap-2 py-3 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
-            Loading patients…
+            {t("changeRate.loading")}
           </p>
         ) : candidates.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No patients yet: the new rate applies to new patients.</p>
+          <p className="text-sm text-muted-foreground">{t("changeRate.noPatients")}</p>
         ) : (
           <ul className="max-h-60 divide-y overflow-y-auto rounded-lg border">
             {candidates.map((c) => (
@@ -177,7 +173,7 @@ function ChangeRateForm({
                   />
                   <span className="flex-1 truncate">{c.name}</span>
                   <span className="tabular-nums text-muted-foreground">
-                    {c.currentRate.toFixed(2)} {currency}
+                    {money(c.currentRate, currency)}
                   </span>
                 </label>
               </li>
@@ -185,17 +181,17 @@ function ChangeRateForm({
           </ul>
         )}
         <p className="text-xs text-muted-foreground">
-          Patients not selected keep their current rate. New patients get the new rate right away.
+          {t("changeRate.footer")}
         </p>
       </div>
 
       <div className="flex justify-end gap-2 border-t pt-4">
         <Button type="button" variant="outline" onClick={onDone}>
-          Cancel
+          {t("common.cancel")}
         </Button>
         <Button type="button" onClick={handleConfirm} disabled={!valid || isPending || candidates === null}>
           {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Confirm
+          {t("common.confirm")}
         </Button>
       </div>
     </div>

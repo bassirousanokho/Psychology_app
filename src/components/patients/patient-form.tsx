@@ -3,7 +3,8 @@
 import { useForm, type UseFormReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
-import { GENDERS, GENDER_LABELS, patientSchemaFor, type PatientFormData } from "@/lib/schemas";
+import { GENDERS, patientSchemaFor, type PatientFormData } from "@/lib/schemas";
+import { useI18n } from "@/i18n/client";
 import { DEFAULT_REGION, regionConfig } from "@/lib/regions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +36,7 @@ export function PatientForm({
   isSubmitting,
 }: PatientFormProps) {
   const cfg = regionConfig(region);
+  const { t } = useI18n();
   const form = useForm<PatientFormData>({
     resolver: zodResolver(patientSchemaFor(cfg.phoneCountry)),
     defaultValues: {
@@ -52,6 +54,7 @@ export function PatientForm({
       doctorName: "",
       doctorPhone: "",
       tariff: "",
+      remindersEnabled: true,
       backgroundNotes: "",
       ...defaultValues,
     },
@@ -66,7 +69,7 @@ export function PatientForm({
             name="firstName"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>First name *</FormLabel>
+                <FormLabel>{t("form.firstName")}</FormLabel>
                 <FormControl>
                   <Input placeholder="Marie" {...field} />
                 </FormControl>
@@ -79,7 +82,7 @@ export function PatientForm({
             name="lastName"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Last name *</FormLabel>
+                <FormLabel>{t("form.lastName")}</FormLabel>
                 <FormControl>
                   <Input placeholder="Dupont" {...field} />
                 </FormControl>
@@ -94,7 +97,7 @@ export function PatientForm({
           name="email"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Email</FormLabel>
+              <FormLabel>{t("form.email")}</FormLabel>
               <FormControl>
                 <Input type="email" placeholder="marie@example.com" {...field} />
               </FormControl>
@@ -108,7 +111,7 @@ export function PatientForm({
           name="phone"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Phone</FormLabel>
+              <FormLabel>{t("form.phone")}</FormLabel>
               <FormControl>
                 <Input type="tel" placeholder={cfg.phonePlaceholder} {...field} />
               </FormControl>
@@ -123,7 +126,7 @@ export function PatientForm({
             name="dateOfBirth"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Date of birth</FormLabel>
+                <FormLabel>{t("form.dateOfBirth")}</FormLabel>
                 <FormControl>
                   <Input type="date" max={new Date().toISOString().slice(0, 10)} {...field} />
                 </FormControl>
@@ -136,7 +139,7 @@ export function PatientForm({
             name="gender"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Gender</FormLabel>
+                <FormLabel>{t("form.gender")}</FormLabel>
                 <FormControl>
                   <select
                     {...field}
@@ -144,7 +147,7 @@ export function PatientForm({
                   >
                     <option value="">—</option>
                     {GENDERS.map((g) => (
-                      <option key={g} value={g}>{GENDER_LABELS[g]}</option>
+                      <option key={g} value={g}>{t(`gender.${g}`)}</option>
                     ))}
                   </select>
                 </FormControl>
@@ -157,9 +160,9 @@ export function PatientForm({
             name="pronouns"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Pronouns</FormLabel>
+                <FormLabel>{t("form.pronouns")}</FormLabel>
                 <FormControl>
-                  <Input placeholder="elle, il, iel…" {...field} />
+                  <Input placeholder={t("form.pronounsPlaceholder")} {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -172,7 +175,7 @@ export function PatientForm({
           name="address"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Postal address</FormLabel>
+              <FormLabel>{t("form.address")}</FormLabel>
               <FormControl>
                 <Textarea
                   rows={2}
@@ -182,36 +185,54 @@ export function PatientForm({
                   value={field.value ?? ""}
                 />
               </FormControl>
-              <p className="text-xs text-muted-foreground">Printed on invoices.</p>
+              <p className="text-xs text-muted-foreground">{t("form.addressHint")}</p>
               <FormMessage />
             </FormItem>
           )}
         />
 
         <fieldset className="space-y-3 rounded-lg border p-3">
-          <legend className="px-1 text-xs font-medium text-muted-foreground">Emergency contact</legend>
+          <legend className="px-1 text-xs font-medium text-muted-foreground">{t("form.emergency")}</legend>
           <div className="grid grid-cols-2 gap-3">
-            <TextField form={form} name="emergencyContactName" label="Full name" />
-            <TextField form={form} name="emergencyContactRelation" label="Relationship" placeholder="Mother, partner…" />
+            <TextField form={form} name="emergencyContactName" label={t("form.fullName")} />
+            <TextField form={form} name="emergencyContactRelation" label={t("form.relationship")} placeholder={t("form.relationshipPlaceholder")} />
           </div>
-          <TextField form={form} name="emergencyContactPhone" label="Phone" type="tel" placeholder={cfg.phonePlaceholder} />
+          <TextField form={form} name="emergencyContactPhone" label={t("form.phone")} type="tel" placeholder={cfg.phonePlaceholder} />
         </fieldset>
 
         <fieldset className="space-y-3 rounded-lg border p-3">
-          <legend className="px-1 text-xs font-medium text-muted-foreground">Family doctor</legend>
+          <legend className="px-1 text-xs font-medium text-muted-foreground">{t("form.doctor")}</legend>
           <div className="grid grid-cols-2 gap-3">
-            <TextField form={form} name="doctorName" label="Full name" placeholder="Dr Marie Leroy" />
-            <TextField form={form} name="doctorPhone" label="Phone" type="tel" placeholder={cfg.phonePlaceholder} />
+            <TextField form={form} name="doctorName" label={t("form.fullName")} placeholder={t("form.doctorPlaceholder")} />
+            <TextField form={form} name="doctorPhone" label={t("form.phone")} type="tel" placeholder={cfg.phonePlaceholder} />
           </div>
         </fieldset>
 
         <TextField
           form={form}
           name="tariff"
-          label="Individual session rate"
+          label={t("form.rate")}
           type="number"
-          placeholder={defaultTariffLabel ? `Practice rate (${defaultTariffLabel})` : "Practice rate"}
-          description="Leave empty to use the practice rate. To change it from a later date with a reminder, use “Schedule rate change” on the patient file."
+          placeholder={defaultTariffLabel ? t("form.ratePlaceholder", { rate: defaultTariffLabel }) : t("form.ratePlaceholderPlain")}
+          description={t("form.rateHint")}
+        />
+
+        <FormField
+          control={form.control}
+          name="remindersEnabled"
+          render={({ field }) => (
+            <FormItem>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4"
+                  checked={field.value ?? true}
+                  onChange={(e) => field.onChange(e.target.checked)}
+                />
+                {t("form.reminders")}
+              </label>
+            </FormItem>
+          )}
         />
 
         <FormField
@@ -219,10 +240,10 @@ export function PatientForm({
           name="backgroundNotes"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Background notes</FormLabel>
+              <FormLabel>{t("form.background")}</FormLabel>
               <FormControl>
                 <Textarea
-                  placeholder="General context, referral source, initial presentation…"
+                  placeholder={t("form.backgroundPlaceholder")}
                   className="min-h-24 resize-none"
                   {...field}
                 />
@@ -234,11 +255,11 @@ export function PatientForm({
 
         <div className="flex justify-end gap-2 pt-2">
           <Button type="button" variant="outline" onClick={onCancel}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button type="submit" disabled={isSubmitting}>
             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Save patient
+            {t("form.save")}
           </Button>
         </div>
       </form>
@@ -255,7 +276,7 @@ function TextField({
   description,
 }: {
   form: UseFormReturn<PatientFormData>;
-  name: keyof PatientFormData;
+  name: Exclude<keyof PatientFormData, "remindersEnabled">; // text fields only
   label: string;
   type?: string;
   placeholder?: string;

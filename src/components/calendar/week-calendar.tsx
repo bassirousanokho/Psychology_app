@@ -16,13 +16,14 @@ import {
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { isHourly, SESSION_TYPE_LABELS, type SessionType } from "@/lib/session-types";
+import { isHourly, type SessionType } from "@/lib/session-types";
+import { useI18n } from "@/i18n/client";
 import { rescheduleAppointment } from "@/app/(dashboard)/dashboard/calendar/actions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { BookingDialog, type Availability } from "./booking-dialog";
 import { AppointmentDialog } from "./appointment-dialog";
-import { layoutLanes } from "@/lib/calendar-layout";
+import { gridHours, layoutLanes } from "@/lib/calendar-layout";
 import type { PatientOption } from "./patient-combobox";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -35,16 +36,14 @@ export type CalendarAppointment = {
   type: SessionType;
   price: number;     // session price snapshot (pre-fills a cancellation fee)
   invoiced: boolean;
+  seriesId: string | null; // recurring sessions booked together
   patient: { firstName: string; lastName: string };
 };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const DAY_START_HOUR = 8;  // 08:00
-const DAY_END_HOUR   = 20; // 20:00
-const TOTAL_HOURS    = DAY_END_HOUR - DAY_START_HOUR; // 12
+// Visible hours follow the working hours (see gridHours), so they're computed per render
 const SLOT_HEIGHT    = 64; // px per hour
-const GRID_HEIGHT    = TOTAL_HOURS * SLOT_HEIGHT;     // 768px
 const DRAG_SNAP_MIN  = 15;
 
 const STATUS_STYLES: Record<CalendarAppointment["status"], string> = {
@@ -60,17 +59,10 @@ const HOURLY_STYLES: Record<Exclude<SessionType, "PSYCHOTHERAPY">, string> = {
   WRITING: "bg-amber-100  border-amber-400  text-amber-900  dark:bg-amber-950  dark:border-amber-600  dark:text-amber-200",
 };
 
-const STATUS_LABELS: Record<CalendarAppointment["status"], string> = {
-  SCHEDULED: "Scheduled",
-  COMPLETED: "Completed",
-  CANCELLED: "Cancelled",
-  NO_SHOW:   "No-show",
-};
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function minutesFromDayStart(date: Date): number {
-  return (date.getHours() - DAY_START_HOUR) * 60 + date.getMinutes();
+function minutesFromDayStart(date: Date, dayStartHour: number): number {
+  return (date.getHours() - dayStartHour) * 60 + date.getMinutes();
 }
 
 function clamp(v: number, min: number, max: number) {
@@ -95,6 +87,8 @@ function AppointmentBlock({
   appt,
   lane,
   lanes,
+  dayStartHour,
+  totalHours,
   onSelect,
   onDragStart,
   onDragEnd,
@@ -102,6 +96,8 @@ function AppointmentBlock({
   appt: CalendarAppointment;
   lane: number;
   lanes: number;
+  dayStartHour: number;
+  totalHours: number;
   onSelect: (appt: CalendarAppointment) => void;
   onDragStart: (appt: CalendarAppointment, grabOffsetMin: number) => void;
   onDragEnd: () => void;
@@ -109,17 +105,18 @@ function AppointmentBlock({
   const start = new Date(appt.startTime);
   const end   = new Date(appt.endTime);
 
-  const startMin   = clamp(minutesFromDayStart(start), 0, TOTAL_HOURS * 60);
+  const startMin   = clamp(minutesFromDayStart(start, dayStartHour), 0, totalHours * 60);
   const durationMin = clamp(
-    minutesFromDayStart(end) - minutesFromDayStart(start),
+    differenceInMinutes(end, start),
     15,
-    TOTAL_HOURS * 60,
+    totalHours * 60 - startMin,
   );
 
   const top    = (startMin / 60) * SLOT_HEIGHT;
   const height = Math.max((durationMin / 60) * SLOT_HEIGHT, 24);
   const movable = isMovable(appt);
-  const label = isHourly(appt.type) ? SESSION_TYPE_LABELS[appt.type] : STATUS_LABELS[appt.status];
+  const { t, fmt } = useI18n();
+  const label = isHourly(appt.type) ? t(`type.${appt.type}`) : t(`status.${appt.status}`);
 
   return (
     <button
@@ -144,13 +141,13 @@ function AppointmentBlock({
         left: `calc(${(lane / lanes) * 100}% + 2px)`,
         width: `calc(${100 / lanes}% - 4px)`,
       }}
-      title={`${appt.patient.lastName}, ${appt.patient.firstName} — ${format(start, "HH:mm")}–${format(end, "HH:mm")}${movable ? " (drag to move)" : ""}`}
+      title={`${appt.patient.lastName}, ${appt.patient.firstName} — ${fmt(start, "HH:mm")}–${fmt(end, "HH:mm")}${movable ? t("calendar.dragToMove") : ""}`}
     >
       <p className="truncate text-xs font-semibold leading-tight">
         {appt.patient.lastName}, {appt.patient.firstName}
       </p>
       <p className="truncate text-xs opacity-75">
-        {format(start, "HH:mm")} – {format(end, "HH:mm")}
+        {fmt(start, "HH:mm")} – {fmt(end, "HH:mm")}
       </p>
       {height >= 56 && (
         <Badge variant="outline" className="mt-1 h-4 px-1 text-[10px]">
@@ -185,6 +182,7 @@ export function WeekCalendar({
   currentWeekISO,
 }: WeekCalendarProps) {
   const router = useRouter();
+  const { t, fmt, tError } = useI18n();
   const weekStart = startOfWeek(new Date(currentWeekISO + "T00:00:00"), { weekStartsOn: 1 });
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
@@ -199,6 +197,14 @@ export function WeekCalendar({
     const move = pendingMoves[a.id];
     return move && move.from === a.startTime ? { ...a, startTime: move.startTime, endTime: move.endTime } : a;
   });
+
+  const { start: dayStartHour, end: dayEndHour } = gridHours(
+    availability.workingHoursStart,
+    availability.workingHoursEnd,
+    shown,
+  );
+  const totalHours = dayEndHour - dayStartHour;
+  const gridHeight = totalHours * SLOT_HEIGHT;
 
   function navigate(dir: "prev" | "next") {
     const newWeek = dir === "next" ? addWeeks(weekStart, 1) : subWeeks(weekStart, 1);
@@ -218,7 +224,7 @@ export function WeekCalendar({
     const y = e.clientY - e.currentTarget.getBoundingClientRect().top;
     const raw = (y / SLOT_HEIGHT) * 60 - state.grabOffsetMin;
     const snapped = Math.round(raw / DRAG_SNAP_MIN) * DRAG_SNAP_MIN;
-    return clamp(snapped, 0, TOTAL_HOURS * 60 - state.durationMin);
+    return clamp(snapped, 0, totalHours * 60 - state.durationMin);
   }
 
   function handleDragOver(e: React.DragEvent<HTMLDivElement>, day: Date) {
@@ -240,7 +246,7 @@ export function WeekCalendar({
     if (!state) return;
 
     const start = new Date(day);
-    start.setHours(DAY_START_HOUR, 0, 0, 0);
+    start.setHours(dayStartHour, 0, 0, 0);
     const newStart = addMinutes(start, dropStartMin(e, state));
     const newEnd = addMinutes(newStart, state.durationMin);
     const { appt } = state;
@@ -252,9 +258,9 @@ export function WeekCalendar({
     }));
     const result = await rescheduleAppointment(appt.id, newStart.toISOString(), newEnd.toISOString());
     if (result.success) {
-      toast.success(`Moved to ${format(newStart, "EEE d MMM, HH:mm")}`);
+      toast.success(t("calendar.moved", { date: fmt(newStart, "EEE d MMM, HH:mm") }));
     } else {
-      toast.error(result.error);
+      toast.error(tError(result.error));
       setPendingMoves((m) => {
         const next = { ...m };
         delete next[appt.id];
@@ -264,8 +270,8 @@ export function WeekCalendar({
   }
 
   const timeLabels = Array.from(
-    { length: TOTAL_HOURS + 1 },
-    (_, i) => `${String(DAY_START_HOUR + i).padStart(2, "0")}:00`,
+    { length: totalHours + 1 },
+    (_, i) => `${String(dayStartHour + i).padStart(2, "0")}:00`,
   );
 
   return (
@@ -287,18 +293,18 @@ export function WeekCalendar({
             )
           }
         >
-          Today
+          {t("calendar.today")}
         </Button>
         <Button variant="outline" size="icon" onClick={() => navigate("next")}>
           <ChevronRight className="h-4 w-4" />
         </Button>
         <span className="ml-2 text-sm font-medium">
-          {format(weekStart, "MMMM yyyy")}
+          {fmt(weekStart, "MMMM yyyy")}
         </span>
         <span className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
-          <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-blue-400" />Psychotherapy</span>
-          <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-violet-400" />Admin</span>
-          <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-amber-400" />Writing</span>
+          <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-blue-400" />{t("type.PSYCHOTHERAPY")}</span>
+          <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-violet-400" />{t("typeShort.ADMIN")}</span>
+          <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-amber-400" />{t("typeShort.WRITING")}</span>
         </span>
       </div>
 
@@ -315,7 +321,7 @@ export function WeekCalendar({
                 isToday(day) && "bg-primary/5",
               )}
             >
-              <p className="text-xs text-muted-foreground">{format(day, "EEE")}</p>
+              <p className="text-xs text-muted-foreground">{fmt(day, "EEE")}</p>
               <p
                 className={cn(
                   "text-sm font-semibold",
@@ -335,7 +341,7 @@ export function WeekCalendar({
             className="grid relative"
             style={{
               gridTemplateColumns: "3.5rem repeat(7, 1fr)",
-              height: GRID_HEIGHT + SLOT_HEIGHT,
+              height: gridHeight + SLOT_HEIGHT,
             }}
           >
             {/* Time labels column */}
@@ -365,17 +371,17 @@ export function WeekCalendar({
                     "relative border-r last:border-r-0",
                     isToday(day) && "bg-primary/5",
                   )}
-                  style={{ height: GRID_HEIGHT + SLOT_HEIGHT }}
+                  style={{ height: gridHeight + SLOT_HEIGHT }}
                   onDragOver={(e) => handleDragOver(e, day)}
                   onDrop={(e) => handleDrop(e, day)}
                 >
                   {/* Hour lines + clickable slots */}
-                  {Array.from({ length: TOTAL_HOURS }, (_, h) => (
+                  {Array.from({ length: totalHours }, (_, h) => (
                     <div
                       key={h}
                       className="absolute w-full border-t border-border/50 hover:bg-muted/40 cursor-pointer transition-colors"
                       style={{ top: h * SLOT_HEIGHT, height: SLOT_HEIGHT }}
-                      onClick={() => handleSlotClick(day, DAY_START_HOUR + h)}
+                      onClick={() => handleSlotClick(day, dayStartHour + h)}
                     />
                   ))}
 
@@ -388,6 +394,8 @@ export function WeekCalendar({
                         appt={appt}
                         lane={lane}
                         lanes={laneCount}
+                        dayStartHour={dayStartHour}
+                        totalHours={totalHours}
                         onSelect={setSelected}
                         onDragEnd={() => {
                           setDrag(null);
@@ -413,7 +421,7 @@ export function WeekCalendar({
                         height: Math.max((dayPreview.durationMin / 60) * SLOT_HEIGHT, 24),
                       }}
                     >
-                      {format(addMinutes(new Date(`${dayKey}T00:00:00`), DAY_START_HOUR * 60 + dayPreview.startMin), "HH:mm")}
+                      {format(addMinutes(new Date(`${dayKey}T00:00:00`), dayStartHour * 60 + dayPreview.startMin), "HH:mm")}
                     </div>
                   )}
                 </div>

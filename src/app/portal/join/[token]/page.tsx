@@ -1,9 +1,10 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { SignIn, SignUp } from "@clerk/nextjs";
-import { format } from "date-fns";
 import { CheckCircle2, Clock, ShieldOff } from "lucide-react";
 import prisma from "@/lib/prisma";
+import { makeI18n, toLang, type I18n } from "@/i18n/core";
+import { getBrowserI18n } from "@/i18n/server";
 
 interface PageProps {
   params: Promise<{ token: string }>;
@@ -18,13 +19,16 @@ export default async function JoinPortalPage({ params }: PageProps) {
     where: { token },
     include: {
       patient: { select: { id: true, firstName: true, lastName: true, email: true, deletedAt: true } },
-      workspace: { select: { name: true } },
+      workspace: { select: { name: true, language: true } },
     },
   });
 
-  if (!invite || invite.patient.deletedAt) return <InvalidInvite reason="not-found" />;
-  if (invite.usedAt) return <InvalidInvite reason="used" />;
-  if (invite.expiresAt < new Date()) return <InvalidInvite reason="expired" />;
+  // The invite's practice language; before the invite is found, the browser's
+  const { t, fmt } = invite ? makeI18n(toLang(invite.workspace.language)) : await getBrowserI18n();
+
+  if (!invite || invite.patient.deletedAt) return <InvalidInvite reason="not-found" t={t} />;
+  if (invite.usedAt) return <InvalidInvite reason="used" t={t} />;
+  if (invite.expiresAt < new Date()) return <InvalidInvite reason="expired" t={t} />;
 
   // 2. Practitioner stumbled on this link — they own a Workspace, send them away
   if (userId) {
@@ -33,11 +37,8 @@ export default async function JoinPortalPage({ params }: PageProps) {
       return (
         <Wrapper>
           <ShieldOff className="h-8 w-8 text-muted-foreground" />
-          <h1 className="text-lg font-semibold">Wrong account</h1>
-          <p className="text-sm text-muted-foreground max-w-sm text-center">
-            You&apos;re currently signed in as a practitioner. Please sign out first and use a
-            different account to accept this invitation.
-          </p>
+          <h1 className="text-lg font-semibold">{t("join.wrongAccount")}</h1>
+          <p className="text-sm text-muted-foreground max-w-sm text-center">{t("join.wrongAccountBody")}</p>
         </Wrapper>
       );
     }
@@ -80,14 +81,14 @@ export default async function JoinPortalPage({ params }: PageProps) {
       <div className="text-center space-y-1">
         <p className="text-sm text-muted-foreground">{invite.workspace.name}</p>
         <h1 className="text-xl font-semibold">
-          Welcome, {invite.patient.firstName}
+          {t("join.welcome", { name: invite.patient.firstName })}
         </h1>
         <p className="text-sm text-muted-foreground">
-          Create your patient account to access your portal.
+          {t("join.create")}
         </p>
         <p className="text-xs text-muted-foreground flex items-center justify-center gap-1 mt-2">
           <Clock className="h-3.5 w-3.5" />
-          Invitation expires {format(invite.expiresAt, "d MMMM yyyy")}
+          {t("join.expires", { date: fmt(invite.expiresAt, "d MMMM yyyy") })}
         </p>
       </div>
 
@@ -99,7 +100,7 @@ export default async function JoinPortalPage({ params }: PageProps) {
       />
 
       <p className="text-sm text-muted-foreground">
-        Already have an account?{" "}
+        {t("join.haveAccount")}{" "}
         <span className="block mt-2">
           <SignIn
             routing="hash"
@@ -121,18 +122,18 @@ function Wrapper({ children }: { children: React.ReactNode }) {
   );
 }
 
-function InvalidInvite({ reason }: { reason: "not-found" | "used" | "expired" }) {
+function InvalidInvite({ reason, t }: { reason: "not-found" | "used" | "expired"; t: I18n["t"] }) {
   const messages = {
-    "not-found": "This invitation link is invalid or has already been deleted.",
-    "used": "This invitation link has already been used. Please sign in to access your portal.",
-    "expired": "This invitation link has expired. Please ask your practitioner to send a new one.",
+    "not-found": t("join.notFound"),
+    "used": t("join.used"),
+    "expired": t("join.expired"),
   };
 
   return (
     <Wrapper>
       <CheckCircle2 className="h-8 w-8 text-muted-foreground" />
       <h1 className="text-lg font-semibold">
-        {reason === "used" ? "Already activated" : "Invalid invitation"}
+        {reason === "used" ? t("join.activated") : t("join.invalid")}
       </h1>
       <p className="text-sm text-muted-foreground max-w-sm text-center">
         {messages[reason]}

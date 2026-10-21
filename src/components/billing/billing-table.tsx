@@ -2,13 +2,18 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { format } from "date-fns";
 import { toast } from "sonner";
-import { ExternalLink, CheckCircle, Send, Loader2, Mail } from "lucide-react";
+import { ExternalLink, CheckCircle, Send, Loader2, Mail, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { markInvoicePaid, markInvoiceSent } from "@/app/(dashboard)/dashboard/billing/actions";
+import {
+  markInvoicePaid,
+  markInvoiceUnpaid,
+  sendInvoice,
+} from "@/app/(dashboard)/dashboard/billing/actions";
 import { sendReceipt } from "@/app/(dashboard)/dashboard/appointments/actions";
+import { formatMoney } from "@/lib/format";
+import { useI18n } from "@/i18n/client";
 
 export type InvoiceRow = {
   id: string;
@@ -17,6 +22,7 @@ export type InvoiceRow = {
   totalAmount: number;
   status: "DRAFT" | "SENT" | "PAID" | "OVERDUE";
   dueDate: string;
+  sentAt: string | null;
   paidAt: string | null;
   receiptSentAt: string | null;
   publicToken: string;
@@ -35,37 +41,26 @@ const STATUS_VARIANTS: Record<
 interface BillingTableProps {
   rows: InvoiceRow[];
   currency: string;
+  locale: string;
 }
 
-export function BillingTable({ rows, currency }: BillingTableProps) {
+export function BillingTable({ rows, currency, locale }: BillingTableProps) {
   const [loadingId, setLoadingId] = useState<string | null>(null);
+  const { t, fmt, tError } = useI18n();
 
-  async function handleMarkSent(id: string) {
+  async function run(id: string, action: () => Promise<{ success: boolean; error?: string }>, ok?: string) {
     setLoadingId(id);
-    const result = await markInvoiceSent(id);
+    const result = await action();
     setLoadingId(null);
-    if (!result.success) toast.error(result.error ?? "Failed");
-  }
-
-  async function handleSendReceipt(id: string) {
-    setLoadingId(id);
-    const result = await sendReceipt(id);
-    setLoadingId(null);
-    if (result.success) toast.success("Receipt sent");
-    else toast.error(result.error ?? "Failed");
-  }
-
-  async function handleMarkPaid(id: string) {
-    setLoadingId(id);
-    const result = await markInvoicePaid(id);
-    setLoadingId(null);
-    if (!result.success) toast.error(result.error ?? "Failed");
+    if (result.success) {
+      if (ok) toast.success(ok);
+    } else toast.error(tError(result.error));
   }
 
   if (rows.length === 0) {
     return (
       <div className="px-5 py-10 text-center text-sm text-muted-foreground">
-        No invoices yet. Generate one from a completed appointment.
+        {t("billing.empty")}
       </div>
     );
   }
@@ -75,29 +70,28 @@ export function BillingTable({ rows, currency }: BillingTableProps) {
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b text-xs text-muted-foreground">
-            <th className="px-5 py-2.5 text-left font-medium">Invoice</th>
-            <th className="px-5 py-2.5 text-left font-medium">Patient</th>
-            <th className="px-5 py-2.5 text-left font-medium">Amount</th>
-            <th className="px-5 py-2.5 text-left font-medium">Due</th>
-            <th className="px-5 py-2.5 text-left font-medium">Status</th>
-            <th className="px-5 py-2.5 text-right font-medium">Actions</th>
+            <th className="px-5 py-2.5 text-left font-medium">{t("billing.col.invoice")}</th>
+            <th className="px-5 py-2.5 text-left font-medium">{t("billing.col.patient")}</th>
+            <th className="px-5 py-2.5 text-left font-medium">{t("billing.col.amount")}</th>
+            <th className="px-5 py-2.5 text-left font-medium">{t("billing.col.due")}</th>
+            <th className="px-5 py-2.5 text-left font-medium">{t("billing.col.status")}</th>
+            <th className="px-5 py-2.5 text-right font-medium">{t("billing.col.actions")}</th>
           </tr>
         </thead>
         <tbody className="divide-y">
           {rows.map((row) => {
             const busy = loadingId === row.id;
+            const spinner = <Loader2 className="h-3.5 w-3.5 animate-spin" />;
             return (
               <tr key={row.id} className="hover:bg-muted/40 transition-colors">
                 <td className="px-5 py-3 font-medium tabular-nums">{row.invoiceNumber}</td>
                 <td className="px-5 py-3">{row.patientName}</td>
-                <td className="px-5 py-3 tabular-nums">
-                  {row.totalAmount.toFixed(2)} {currency}
-                </td>
+                <td className="px-5 py-3 tabular-nums">{formatMoney(row.totalAmount, currency, locale)}</td>
                 <td className="px-5 py-3 text-muted-foreground">
-                  {format(new Date(row.dueDate), "d MMM yyyy")}
+                  {fmt(row.dueDate, "d MMM yyyy")}
                 </td>
                 <td className="px-5 py-3">
-                  <Badge variant={STATUS_VARIANTS[row.status]}>{row.status}</Badge>
+                  <Badge variant={STATUS_VARIANTS[row.status]}>{t(`invoiceStatus.${row.status}`)}</Badge>
                 </td>
                 <td className="px-5 py-3">
                   <div className="flex items-center justify-end gap-1.5">
@@ -111,17 +105,18 @@ export function BillingTable({ rows, currency }: BillingTableProps) {
                       <ExternalLink className="h-3.5 w-3.5" />
                     </Button>
 
-                    {/* Mark as Sent (DRAFT only) */}
-                    {row.status === "DRAFT" && (
+                    {/* Email the invoice (unpaid) */}
+                    {row.status !== "PAID" && (
                       <Button
                         variant="outline"
                         size="sm"
                         className="h-7 text-xs"
-                        onClick={() => handleMarkSent(row.id)}
+                        onClick={() => run(row.id, () => sendInvoice(row.id), t("billing.sentToast"))}
                         disabled={busy}
+                        title={row.sentAt ? t("billing.lastSent", { date: fmt(row.sentAt, "d MMM yyyy") }) : undefined}
                       >
-                        {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-                        <span className="ml-1.5">Sent</span>
+                        {busy ? spinner : <Send className="h-3.5 w-3.5" />}
+                        <span className="ml-1.5">{row.sentAt ? t("billing.resend") : t("billing.send")}</span>
                       </Button>
                     )}
 
@@ -131,11 +126,11 @@ export function BillingTable({ rows, currency }: BillingTableProps) {
                         variant="outline"
                         size="sm"
                         className="h-7 text-xs"
-                        onClick={() => handleMarkPaid(row.id)}
+                        onClick={() => run(row.id, () => markInvoicePaid(row.id))}
                         disabled={busy}
                       >
-                        {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />}
-                        <span className="ml-1.5">Paid</span>
+                        {busy ? spinner : <CheckCircle className="h-3.5 w-3.5" />}
+                        <span className="ml-1.5">{t("billing.paid")}</span>
                       </Button>
                     )}
 
@@ -145,12 +140,30 @@ export function BillingTable({ rows, currency }: BillingTableProps) {
                         variant="outline"
                         size="sm"
                         className="h-7 text-xs"
-                        onClick={() => handleSendReceipt(row.id)}
+                        onClick={() => run(row.id, () => sendReceipt(row.id), t("billing.receiptToast"))}
                         disabled={busy}
-                        title={row.receiptSentAt ? `Last sent ${format(new Date(row.receiptSentAt), "d MMM yyyy")}` : undefined}
+                        title={row.receiptSentAt ? t("billing.lastSent", { date: fmt(row.receiptSentAt, "d MMM yyyy") }) : undefined}
                       >
-                        {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mail className="h-3.5 w-3.5" />}
-                        <span className="ml-1.5">{row.receiptSentAt ? "Resend receipt" : "Receipt"}</span>
+                        {busy ? spinner : <Mail className="h-3.5 w-3.5" />}
+                        <span className="ml-1.5">{row.receiptSentAt ? t("billing.resendReceipt") : t("billing.receipt")}</span>
+                      </Button>
+                    )}
+
+                    {/* Undo "paid" clicked by mistake */}
+                    {row.status === "PAID" && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs text-muted-foreground"
+                        title={t("billing.undoPaid")}
+                        disabled={busy}
+                        onClick={() => {
+                          if (window.confirm(t("billing.confirmUnpaid", { number: row.invoiceNumber }))) {
+                            run(row.id, () => markInvoiceUnpaid(row.id), t("billing.unpaidToast"));
+                          }
+                        }}
+                      >
+                        <Undo2 className="h-3.5 w-3.5" />
                       </Button>
                     )}
                   </div>

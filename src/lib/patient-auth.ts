@@ -21,6 +21,8 @@ export type PatientSession = {
     workingDays: number[];
     workingHoursStart: string;
     workingHoursEnd: string;
+    language: string;
+    region: string;
   };
 };
 
@@ -52,6 +54,8 @@ export async function requirePatientAuth(): Promise<PatientSession> {
           workingDays: true,
           workingHoursStart: true,
           workingHoursEnd: true,
+          language: true,
+          region: true,
         },
       },
     },

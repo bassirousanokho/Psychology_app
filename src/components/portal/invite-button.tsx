@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Mail, Loader2, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useI18n } from "@/i18n/client";
 import { sendPortalInviteAction } from "@/app/(dashboard)/dashboard/patients/[id]/actions";
 
 interface InviteButtonProps {
@@ -14,12 +15,13 @@ interface InviteButtonProps {
 export function InviteButton({ patientId, hasPortalAccess }: InviteButtonProps) {
   const [sent, setSent] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const { t, tError } = useI18n();
 
   if (hasPortalAccess) {
     return (
       <span className="flex items-center gap-1.5 text-sm text-green-600 font-medium">
         <CheckCircle2 className="h-4 w-4" />
-        Portal active
+        {t("invite.active")}
       </span>
     );
   }
@@ -29,9 +31,9 @@ export function InviteButton({ patientId, hasPortalAccess }: InviteButtonProps) 
       const result = await sendPortalInviteAction(patientId);
       if (result.success) {
         setSent(true);
-        toast.success("Invitation sent to patient's email");
+        toast.success(t("invite.sentToast"));
       } else {
-        toast.error(result.error ?? "Failed to send invitation");
+        toast.error(tError(result.error));
       }
     });
   }
@@ -40,7 +42,7 @@ export function InviteButton({ patientId, hasPortalAccess }: InviteButtonProps) 
     return (
       <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
         <CheckCircle2 className="h-4 w-4 text-green-500" />
-        Invitation sent
+        {t("invite.sent")}
       </span>
     );
   }
@@ -52,7 +54,7 @@ export function InviteButton({ patientId, hasPortalAccess }: InviteButtonProps) 
       ) : (
         <Mail className="mr-2 h-4 w-4" />
       )}
-      Invite to portal
+      {t("invite.button")}
     </Button>
   );
 }

@@ -3,7 +3,9 @@
 import { auth } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 import prisma from "@/lib/prisma";
-import { sendReceiptEmail } from "@/lib/email";
+import { sendReceiptEmail, type SendStatus } from "@/lib/email";
+import { formatLongDate, formatMoney, langOf, localeOf } from "@/lib/format";
+import { taxLinesFor } from "@/lib/taxes";
 
 type ActionResult = { success: true } | { success: false; error: string };
 
@@ -45,7 +47,10 @@ async function createInvoice(
 ): Promise<{ success: true; invoiceId: string } | { success: false; error: string }> {
   const appointment = await prisma.appointment.findFirst({
     where: { id: appointmentId, workspaceId },
-    include: { invoice: { select: { id: true } } },
+    include: {
+      invoice: { select: { id: true } },
+      workspace: { select: { region: true, gstRate: true, qstRate: true } },
+    },
   });
   if (!appointment) return { success: false, error: "Appointment not found" };
   if (appointment.invoice) return { success: true, invoiceId: appointment.invoice.id };
@@ -58,7 +63,12 @@ async function createInvoice(
 
   const amount = chargedCancellation ? fee : appointment.tariffAmount;
   const taxRate = appointment.taxRate;
-  const taxAmount = amount.mul(taxRate).div(100);
+  // Québec: the booked rate is split into TPS and TVQ lines (one line elsewhere)
+  const ws = appointment.workspace;
+  const taxLines = taxLinesFor(Number(amount), Number(taxRate), ws.region, Number(ws.gstRate), Number(ws.qstRate));
+  const taxAmount = taxLines
+    ? taxLines.reduce((sum, l) => sum + l.amount, 0).toFixed(2)
+    : amount.mul(taxRate).div(100).toDecimalPlaces(2);
   const totalAmount = amount.add(taxAmount);
 
   // Two invoices generated at the same moment could pick the same number: the
@@ -75,6 +85,7 @@ async function createInvoice(
           amount,
           taxAmount,
           taxRate,
+          taxLines: taxLines ?? undefined,
           totalAmount,
           status: "DRAFT",
           dueDate: appointment.startTime,
@@ -133,7 +144,9 @@ export async function sendReceipt(invoiceId: string): Promise<ActionResult> {
     where: { id: invoiceId, workspaceId },
     include: {
       patient: { select: { firstName: true, lastName: true, email: true } },
-      workspace: { select: { name: true, currency: true } },
+      workspace: {
+        select: { name: true, practitionerName: true, currency: true, region: true, language: true },
+      },
     },
   });
   if (!invoice) return { success: false, error: "Invoice not found" };
@@ -143,20 +156,26 @@ export async function sendReceipt(invoiceId: string): Promise<ActionResult> {
   if (!invoice.patient.email) return { success: false, error: "Patient has no email address on file" };
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const ws = invoice.workspace;
+  const lang = langOf(ws.language);
+  let status: SendStatus;
   try {
-    await sendReceiptEmail({
+    status = await sendReceiptEmail({
+      lang,
       to: invoice.patient.email,
       patientName: `${invoice.patient.firstName} ${invoice.patient.lastName}`,
-      practiceName: invoice.workspace.name,
+      practiceName: ws.practitionerName || ws.name,
       invoiceNumber: invoice.invoiceNumber,
-      totalAmount: Number(invoice.totalAmount).toFixed(2),
-      currency: invoice.workspace.currency,
-      paidOn: invoice.paidAt.toLocaleDateString("fr-FR"),
+      total: formatMoney(Number(invoice.totalAmount), ws.currency, localeOf(lang, ws.region)),
+      paidOn: formatLongDate(invoice.paidAt, lang, ws.region),
       publicUrl: `${appUrl}/invoice/${invoice.publicToken}`,
     });
   } catch (err) {
     console.error("[sendReceipt]", err);
     return { success: false, error: "The email could not be sent" };
+  }
+  if (status === "NOT_CONFIGURED") {
+    return { success: false, error: "No email provider is configured: the receipt was not sent" };
   }
 
   await prisma.invoice.update({ where: { id: invoiceId }, data: { receiptSentAt: new Date() } });

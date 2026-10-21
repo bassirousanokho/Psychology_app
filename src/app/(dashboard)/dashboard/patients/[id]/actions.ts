@@ -6,8 +6,9 @@ import prisma from "@/lib/prisma";
 import { requireAuth } from "@/lib/tenant";
 import { audit } from "@/lib/tenant";
 import { getUploadUrl, deleteFile } from "@/lib/gcs";
-import { sendPatientMessage, sendPortalInvite } from "@/lib/email";
+import { sendPatientMessage, sendPortalInvite, sendStatementEmail } from "@/lib/email";
 import { encrypt } from "@/lib/crypto";
+import { formatLongDate, langOf } from "@/lib/format";
 
 const MAX_PDF_BYTES = 16 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
@@ -156,7 +157,14 @@ export async function sendPortalInviteAction(patientId: string) {
 
   const patient = await prisma.patient.findFirst({
     where: { id: patientId, workspaceId: orgId, deletedAt: null },
-    select: { id: true, email: true, firstName: true, lastName: true, portalUser: true },
+    select: {
+      id: true,
+      email: true,
+      firstName: true,
+      lastName: true,
+      portalUser: true,
+      workspace: { select: { language: true } },
+    },
   });
   if (!patient) return { success: false, error: "Patient not found" };
   if (!patient.email) return { success: false, error: "Patient has no email address on file" };
@@ -184,10 +192,12 @@ export async function sendPortalInviteAction(patientId: string) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
   const inviteUrl = `${appUrl}/portal/join/${invite.token}`;
 
+  const lang = langOf(patient.workspace.language);
   await sendPortalInvite({
+    lang,
     to: patient.email,
     patientName: `${patient.firstName} ${patient.lastName}`,
-    practitionerName: practitioner?.name ?? "Your practitioner",
+    practitionerName: practitioner?.name ?? (lang === "fr" ? "Votre psychologue" : "Your practitioner"),
     inviteUrl,
     expiresInDays: 7,
   });
@@ -263,4 +273,69 @@ export async function sendPatientMessageAction(
   revalidatePath(`/dashboard/patients/${patientId}`);
   if (status === "FAILED") return { success: false, error: `The email could not be sent: ${error}` };
   return { success: true, status };
+}
+
+// ── Statement of payments (for insurance) ────────────────────────────────────
+
+/**
+ * Creates a statement for a period; optionally emails the patient a link to it.
+ * Returns the public URL path so the practitioner can open or print it.
+ */
+export async function createStatement(input: {
+  patientId: string;
+  periodStart: string; // YYYY-MM-DD
+  periodEnd: string;   // YYYY-MM-DD
+  send: boolean;
+}): Promise<{ success: true; path: string; emailed: boolean } | { success: false; error: string }> {
+  const { orgId } = await requireAuth();
+  const dateRe = /^\d{4}-\d{2}-\d{2}$/;
+  if (!dateRe.test(input.periodStart) || !dateRe.test(input.periodEnd) || input.periodEnd < input.periodStart) {
+    return { success: false, error: "Pick a valid period" };
+  }
+
+  const patient = await prisma.patient.findFirst({
+    where: { id: input.patientId, workspaceId: orgId },
+    select: {
+      firstName: true,
+      lastName: true,
+      email: true,
+      workspace: { select: { name: true, practitionerName: true, region: true, language: true } },
+    },
+  });
+  if (!patient) return { success: false, error: "Patient not found" };
+  if (input.send && !patient.email) return { success: false, error: "Patient has no email address on file" };
+
+  const statement = await prisma.statement.create({
+    data: {
+      workspaceId: orgId,
+      patientId: input.patientId,
+      periodStart: new Date(input.periodStart),
+      periodEnd: new Date(input.periodEnd),
+    },
+  });
+  const path = `/statement/${statement.publicToken}`;
+
+  if (!input.send) return { success: true, path, emailed: false };
+
+  const ws = patient.workspace;
+  const lang = langOf(ws.language);
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  try {
+    const status = await sendStatementEmail({
+      lang,
+      to: patient.email!,
+      patientName: `${patient.firstName} ${patient.lastName}`,
+      practiceName: ws.practitionerName || ws.name,
+      period: `${formatLongDate(new Date(`${input.periodStart}T12:00:00`), lang, ws.region)} – ${formatLongDate(new Date(`${input.periodEnd}T12:00:00`), lang, ws.region)}`,
+      publicUrl: `${appUrl}${path}`,
+    });
+    if (status === "NOT_CONFIGURED") {
+      return { success: false, error: "No email provider is configured: the statement was created but not sent" };
+    }
+  } catch (err) {
+    console.error("[createStatement]", err);
+    return { success: false, error: "The email could not be sent" };
+  }
+  await prisma.statement.update({ where: { id: statement.id }, data: { sentAt: new Date() } });
+  return { success: true, path, emailed: true };
 }

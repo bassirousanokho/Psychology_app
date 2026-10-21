@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { Upload, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useI18n } from "@/i18n/client";
 import { createUploadUrl, confirmDocumentUpload } from "@/app/(dashboard)/dashboard/patients/[id]/actions";
 
 interface DocumentUploaderProps {
@@ -20,10 +21,11 @@ export function DocumentUploader({
   patientId,
   appointmentId,
   isSessionNote,
-  label = "Upload document",
+  label,
 }: DocumentUploaderProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const { t, tp, tError } = useI18n();
 
   const busy = uploading;
 
@@ -33,7 +35,7 @@ export function DocumentUploader({
     const fileArray = Array.from(files);
     const oversized = fileArray.find((f) => f.size > MAX_MB * 1024 * 1024);
     if (oversized) {
-      toast.error(`${oversized.name} exceeds the ${MAX_MB} MB limit`);
+      toast.error(t("docs.tooLarge", { name: oversized.name, max: MAX_MB }));
       return;
     }
 
@@ -48,7 +50,7 @@ export function DocumentUploader({
           fileSize: file.size,
         });
         if (!urlResult.success || !urlResult.uploadUrl || !urlResult.key) {
-          toast.error(urlResult.error ?? `Failed to prepare upload for ${file.name}`);
+          toast.error(urlResult.error ? tError(urlResult.error) : t("docs.prepareFailed", { name: file.name }));
           continue;
         }
 
@@ -58,7 +60,7 @@ export function DocumentUploader({
           body: file,
         });
         if (!putRes.ok) {
-          toast.error(`Failed to upload ${file.name}`);
+          toast.error(t("docs.uploadFailed", { name: file.name }));
           continue;
         }
 
@@ -72,7 +74,7 @@ export function DocumentUploader({
           fileSize: file.size,
         });
         if (!saved.success) {
-          toast.error(`Failed to save ${file.name}`);
+          toast.error(t("docs.saveFailed", { name: file.name }));
           continue;
         }
         uploaded.push(file);
@@ -80,16 +82,12 @@ export function DocumentUploader({
       setUploading(false);
 
       if (uploaded.length > 0) {
-        toast.success(
-          uploaded.length === 1
-            ? "Document uploaded"
-            : `${uploaded.length} documents uploaded`,
-        );
+        toast.success(tp(uploaded.length, "docs.uploaded"));
       }
     } catch (err) {
       setUploading(false);
       console.error("[DocumentUploader]", err);
-      toast.error("Upload failed. Please try again.");
+      toast.error(t("docs.retry"));
     }
 
     // Reset input so the same file can be re-uploaded if needed
@@ -117,7 +115,7 @@ export function DocumentUploader({
         ) : (
           <Upload className="mr-2 h-4 w-4" />
         )}
-        {uploading ? "Uploading…" : label}
+        {uploading ? t("docs.uploading") : (label ?? t("docs.upload"))}
       </Button>
     </>
   );

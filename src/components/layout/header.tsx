@@ -5,6 +5,7 @@ import { Search } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
+import { useI18n } from "@/i18n/client";
 
 interface HeaderProps {
   title: string;
@@ -12,6 +13,7 @@ interface HeaderProps {
 
 export function Header({ title }: HeaderProps) {
   const router = useRouter();
+  const { t } = useI18n();
 
   // Search from any page: Enter opens the patient list filtered by the query
   function handleSearch(e: React.FormEvent<HTMLFormElement>) {
@@ -32,8 +34,8 @@ export function Header({ title }: HeaderProps) {
         <Input
           name="q"
           type="search"
-          placeholder="Search patients…"
-          aria-label="Search patients"
+          placeholder={t("header.searchPatients")}
+          aria-label={t("header.searchPatients")}
           className="w-64 pl-8 h-8 text-sm"
         />
       </form>

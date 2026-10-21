@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { format } from "date-fns";
+
 import { ExternalLink } from "lucide-react";
 import { requirePatientAuth } from "@/lib/patient-auth";
+import { portalI18n } from "@/i18n/server";
 import prisma from "@/lib/prisma";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,7 @@ const STATUS_VARIANTS = {
 
 export default async function PortalInvoicesPage() {
   const session = await requirePatientAuth();
+  const { t, tp, fmt, money } = portalI18n(session.workspace);
 
   const invoices = await prisma.invoice.findMany({
     where: {
@@ -28,15 +30,15 @@ export default async function PortalInvoicesPage() {
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-4">
       <div>
-        <h1 className="text-2xl font-bold">Invoices</h1>
+        <h1 className="text-2xl font-bold">{t("portal.invoices")}</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
-          {invoices.length} invoice{invoices.length !== 1 ? "s" : ""}
+          {tp(invoices.length, "portal.invoiceCount")}
         </p>
       </div>
 
       <div className="rounded-xl border bg-card">
         {invoices.length === 0 ? (
-          <p className="px-5 py-6 text-sm text-muted-foreground">No invoices yet.</p>
+          <p className="px-5 py-6 text-sm text-muted-foreground">{t("portal.noInvoices")}</p>
         ) : (
           <ul className="divide-y">
             {invoices.map((inv) => (
@@ -44,14 +46,14 @@ export default async function PortalInvoicesPage() {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium">{inv.invoiceNumber}</p>
                   <p className="text-xs text-muted-foreground">
-                    {Number(inv.totalAmount).toFixed(2)} {session.workspace.currency} ·{" "}
-                    due {format(inv.dueDate, "d MMM yyyy")}
-                    {inv.paidAt && ` · paid ${format(inv.paidAt, "d MMM yyyy")}`}
+                    {money(Number(inv.totalAmount), session.workspace.currency)} ·{" "}
+                    {t("portal.due", { date: fmt(inv.dueDate, "d MMM yyyy") })}
+                    {inv.paidAt && t("portal.paidOn", { date: fmt(inv.paidAt, "d MMM yyyy") })}
                   </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <Badge variant={STATUS_VARIANTS[inv.status]}>
-                    {inv.status.charAt(0) + inv.status.slice(1).toLowerCase()}
+                    {t(`invoiceStatus.${inv.status}`)}
                   </Badge>
                   <Button
                     variant="ghost"
@@ -64,7 +66,7 @@ export default async function PortalInvoicesPage() {
                         rel="noopener noreferrer"
                       />
                     }
-                    title="View invoice"
+                    title={t("portal.viewInvoice")}
                   >
                     <ExternalLink className="h-3.5 w-3.5" />
                   </Button>

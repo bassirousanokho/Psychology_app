@@ -7,6 +7,7 @@ import { Loader2 } from "lucide-react";
 import { rescheduleAppointment } from "@/app/(dashboard)/dashboard/calendar/actions";
 import { formatDuration, hourlyAmount, HOURLY_DURATIONS } from "@/lib/session-types";
 import { Label } from "@/components/ui/label";
+import { useI18n } from "@/i18n/client";
 
 /** Hourly work: change the time spent (half-hour steps); the price follows. */
 export function TimeSpentPicker({
@@ -24,6 +25,7 @@ export function TimeSpentPicker({
 }) {
   const [value, setValue] = useState(minutes);
   const [isPending, startTransition] = useTransition();
+  const { t, tError, money } = useI18n();
   const options = HOURLY_DURATIONS.includes(minutes)
     ? HOURLY_DURATIONS
     : [...HOURLY_DURATIONS, minutes].sort((a, b) => a - b);
@@ -38,17 +40,17 @@ export function TimeSpentPicker({
         start.toISOString(),
         addMinutes(start, next).toISOString(),
       );
-      if (result.success) toast.success(`Time spent: ${formatDuration(next)}`);
+      if (result.success) toast.success(t("timeSpent.toast", { duration: formatDuration(next) }));
       else {
         setValue(previous);
-        toast.error(result.error);
+        toast.error(tError(result.error));
       }
     });
   }
 
   return (
     <div className="flex flex-wrap items-center gap-3">
-      <Label htmlFor="time-spent">Time spent</Label>
+      <Label htmlFor="time-spent">{t("timeSpent.label")}</Label>
       <select
         id="time-spent"
         value={value}
@@ -63,7 +65,7 @@ export function TimeSpentPicker({
         ))}
       </select>
       <span className="text-sm tabular-nums text-muted-foreground">
-        = {hourlyAmount(hourlyRate, value).toFixed(2)} {currency}
+        = {money(hourlyAmount(hourlyRate, value), currency)}
       </span>
       {isPending && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
     </div>

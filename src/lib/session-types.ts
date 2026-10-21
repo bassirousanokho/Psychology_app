@@ -38,3 +38,6 @@ export function formatDuration(minutes: number): string {
 export function hourlyAmount(rate: number, minutes: number): number {
   return Math.round(rate * (minutes / 60) * 100) / 100;
 }
+
+/** Most sessions a recurring booking can create at once (a year of weekly sessions). */
+export const MAX_OCCURRENCES = 52;

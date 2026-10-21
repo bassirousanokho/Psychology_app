@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { useI18n } from "@/i18n/client";
 import {
   Command,
   CommandEmpty,
@@ -35,9 +36,10 @@ export function PatientCombobox({
   patients,
   value,
   onChange,
-  placeholder = "Select patient…",
+  placeholder,
 }: PatientComboboxProps) {
   const [open, setOpen] = useState(false);
+  const { t } = useI18n();
 
   const selected = patients.find((p) => p.id === value);
 
@@ -55,14 +57,14 @@ export function PatientCombobox({
       >
         {selected
           ? `${selected.lastName}, ${selected.firstName}`
-          : placeholder}
+          : (placeholder ?? t("booking.selectPatient"))}
         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
       </PopoverTrigger>
       <PopoverContent className="w-full p-0" align="start">
         <Command>
-          <CommandInput placeholder="Search by name…" />
+          <CommandInput placeholder={t("booking.searchPatient")} />
           <CommandList>
-            <CommandEmpty>No patients found.</CommandEmpty>
+            <CommandEmpty>{t("booking.noPatients")}</CommandEmpty>
             <CommandGroup>
               {patients.map((patient) => (
                 <CommandItem

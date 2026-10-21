@@ -42,6 +42,7 @@ function toPatientData(data: PatientFormData, country: CountryCode) {
     doctorPhone: data.doctorPhone?.trim() ? normalizePhone(data.doctorPhone, country) : null,
     tariff: data.tariff?.trim() ? Number(data.tariff) : null,
     backgroundNotes: data.backgroundNotes || null,
+    remindersEnabled: data.remindersEnabled ?? true,
   };
 }
 

@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { format } from "date-fns";
+
 import { CalendarPlus, CalendarDays, FileText } from "lucide-react";
 import { requirePatientAuth } from "@/lib/patient-auth";
+import { portalI18n } from "@/i18n/server";
 import prisma from "@/lib/prisma";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +16,7 @@ const STATUS_VARIANTS = {
 
 export default async function PortalDashboardPage() {
   const session = await requirePatientAuth();
+  const { t, fmt } = portalI18n(session.workspace);
 
   const now = new Date();
 
@@ -48,10 +50,10 @@ export default async function PortalDashboardPage() {
       {/* Greeting */}
       <div>
         <h1 className="text-2xl font-bold">
-          Hello, {session.patient.firstName}
+          {t("portal.hello", { name: session.patient.firstName })}
         </h1>
         <p className="text-sm text-muted-foreground mt-0.5">
-          Welcome to your patient portal at {session.workspace.name}.
+          {t("portal.welcome", { practice: session.workspace.name })}
         </p>
       </div>
 
@@ -60,7 +62,7 @@ export default async function PortalDashboardPage() {
         <div className="flex items-center justify-between border-b px-5 py-3">
           <h2 className="font-semibold flex items-center gap-2">
             <CalendarDays className="h-4 w-4" />
-            Upcoming appointments
+            {t("portal.upcoming")}
           </h2>
           <Button
             size="sm"
@@ -69,15 +71,15 @@ export default async function PortalDashboardPage() {
             render={<Link href="/portal/book" />}
           >
             <CalendarPlus className="mr-1.5 h-3.5 w-3.5" />
-            Book session
+            {t("portal.bookSession")}
           </Button>
         </div>
 
         {upcoming.length === 0 ? (
           <div className="px-5 py-6 text-sm text-muted-foreground">
-            No upcoming sessions.{" "}
+            {t("portal.noUpcoming")}{" "}
             <Link href="/portal/book" className="underline underline-offset-2">
-              Book one now.
+              {t("portal.bookNow")}
             </Link>
           </div>
         ) : (
@@ -86,14 +88,14 @@ export default async function PortalDashboardPage() {
               <li key={appt.id} className="flex items-center gap-4 px-5 py-3">
                 <div className="flex-1">
                   <p className="text-sm font-medium">
-                    {format(appt.startTime, "EEEE d MMMM yyyy")}
+                    {fmt(appt.startTime, "EEEE d MMMM yyyy")}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {format(appt.startTime, "HH:mm")} – {format(appt.endTime, "HH:mm")}
+                    {fmt(appt.startTime, "HH:mm")} – {fmt(appt.endTime, "HH:mm")}
                   </p>
                 </div>
                 <Badge variant={STATUS_VARIANTS[appt.status]}>
-                  {appt.status.charAt(0) + appt.status.slice(1).toLowerCase()}
+                  {t(`status.${appt.status}`)}
                 </Badge>
               </li>
             ))}
@@ -107,7 +109,7 @@ export default async function PortalDashboardPage() {
           <div className="flex items-center justify-between border-b px-5 py-3">
             <h2 className="font-semibold flex items-center gap-2">
               <FileText className="h-4 w-4" />
-              Documents from your practitioner
+              {t("portal.docsFromPractitioner")}
             </h2>
             <Button
               size="sm"
@@ -115,7 +117,7 @@ export default async function PortalDashboardPage() {
               className="h-7 text-xs"
               render={<Link href="/portal/documents" />}
             >
-              View all
+              {t("portal.viewAll")}
             </Button>
           </div>
           <ul className="divide-y">
@@ -124,7 +126,7 @@ export default async function PortalDashboardPage() {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{doc.name}</p>
                   <p className="text-xs text-muted-foreground">
-                    {format(doc.createdAt, "d MMM yyyy")}
+                    {fmt(doc.createdAt, "d MMM yyyy")}
                   </p>
                 </div>
                 <Button
@@ -133,7 +135,7 @@ export default async function PortalDashboardPage() {
                   className="h-7 text-xs shrink-0"
                   render={<a href={doc.url} target="_blank" rel="noopener noreferrer" />}
                 >
-                  Download
+                  {t("portal.download")}
                 </Button>
               </li>
             ))}

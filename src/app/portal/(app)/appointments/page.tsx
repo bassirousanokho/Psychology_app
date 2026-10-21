@@ -1,9 +1,9 @@
 import Link from "next/link";
-import { format } from "date-fns";
+
 import { CalendarPlus } from "lucide-react";
 import { requirePatientAuth } from "@/lib/patient-auth";
+import { portalI18n } from "@/i18n/server";
 import prisma from "@/lib/prisma";
-import { SESSION_TYPE_LABELS } from "@/lib/session-types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
@@ -14,15 +14,9 @@ const STATUS_VARIANTS = {
   NO_SHOW:   "destructive",
 } as const;
 
-const STATUS_LABELS = {
-  SCHEDULED: "Scheduled",
-  COMPLETED: "Completed",
-  CANCELLED: "Cancelled",
-  NO_SHOW:   "No-show",
-} as const;
-
 export default async function PortalAppointmentsPage() {
   const session = await requirePatientAuth();
+  const { t, tp, fmt, money } = portalI18n(session.workspace);
 
   const appointments = await prisma.appointment.findMany({
     where: {
@@ -45,23 +39,23 @@ export default async function PortalAppointmentsPage() {
     <div className="p-6 max-w-3xl mx-auto space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Appointments</h1>
+          <h1 className="text-2xl font-bold">{t("portal.appointments")}</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {appointments.length} session{appointments.length !== 1 ? "s" : ""} total
+            {tp(appointments.length, "portal.sessionsTotal")}
           </p>
         </div>
         <Button render={<Link href="/portal/book" />}>
           <CalendarPlus className="mr-2 h-4 w-4" />
-          Book session
+          {t("portal.bookSession")}
         </Button>
       </div>
 
       <div className="rounded-xl border bg-card">
         {appointments.length === 0 ? (
           <p className="px-5 py-6 text-sm text-muted-foreground">
-            No appointments yet.{" "}
+            {t("portal.noAppointments")}{" "}
             <Link href="/portal/book" className="underline underline-offset-2">
-              Book your first session.
+              {t("portal.bookFirst")}
             </Link>
           </p>
         ) : (
@@ -70,21 +64,21 @@ export default async function PortalAppointmentsPage() {
               <li key={appt.id} className="flex items-center gap-4 px-5 py-3">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium">
-                    {format(appt.startTime, "EEEE d MMMM yyyy")}
+                    {fmt(appt.startTime, "EEEE d MMMM yyyy")}
                     {appt.type !== "PSYCHOTHERAPY" && (
                       <span className="ml-2 text-xs font-normal text-muted-foreground">
-                        {SESSION_TYPE_LABELS[appt.type]}
+                        {t(`type.${appt.type}`)}
                       </span>
                     )}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {format(appt.startTime, "HH:mm")} – {format(appt.endTime, "HH:mm")} ·{" "}
-                    {Number(appt.tariffAmount).toFixed(2)} {session.workspace.currency}
+                    {fmt(appt.startTime, "HH:mm")} – {fmt(appt.endTime, "HH:mm")} ·{" "}
+                    {money(Number(appt.tariffAmount), session.workspace.currency)}
                   </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <Badge variant={STATUS_VARIANTS[appt.status]}>
-                    {STATUS_LABELS[appt.status]}
+                    {t(`status.${appt.status}`)}
                   </Badge>
                   {appt.invoice && (
                     <Button
@@ -98,7 +92,7 @@ export default async function PortalAppointmentsPage() {
                         />
                       }
                     >
-                      Invoice
+                      {t("portal.invoice")}
                     </Button>
                   )}
                 </div>

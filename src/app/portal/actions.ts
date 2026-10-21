@@ -68,23 +68,29 @@ export async function bookAppointment(input: {
   redirect("/portal/appointments");
 }
 
-/** Returns booked hours (integers) for a given date in the workspace. */
-export async function getBookedHours(
+/**
+ * Busy therapy-session ranges for a date, as [startMinute, endMinute] from local
+ * midnight, so a slot is taken whenever any session overlaps it (not only when a
+ * session starts in that hour).
+ */
+export async function getBusyRanges(
   workspaceId: string,
   date: string,
-): Promise<number[]> {
+): Promise<[number, number][]> {
   const dayStart = new Date(`${date}T00:00:00`);
-  const dayEnd = new Date(`${date}T23:59:59`);
+  const dayEnd = new Date(`${date}T23:59:59.999`);
 
   const appts = await prisma.appointment.findMany({
     where: {
       workspaceId,
       type: "PSYCHOTHERAPY",
       status: { in: ["SCHEDULED", "COMPLETED"] },
-      startTime: { gte: dayStart, lte: dayEnd },
+      startTime: { lt: dayEnd },
+      endTime: { gt: dayStart },
     },
-    select: { startTime: true },
+    select: { startTime: true, endTime: true },
   });
 
-  return appts.map((a) => a.startTime.getHours());
+  const minutes = (d: Date) => Math.round((d.getTime() - dayStart.getTime()) / 60000);
+  return appts.map((a) => [Math.max(0, minutes(a.startTime)), Math.min(24 * 60, minutes(a.endTime))]);
 }

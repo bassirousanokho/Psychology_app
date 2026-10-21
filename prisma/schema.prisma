@@ -47,11 +47,22 @@ model Workspace {
 
   // Billing defaults – practitioners can override per appointment
   defaultTariff Decimal @default(0) @db.Decimal(10, 2)
-  taxRate       Decimal @default(0) @db.Decimal(5, 2)
+  taxRate       Decimal @default(0) @db.Decimal(6, 3) // combined rate applied at booking
   currency      String  @default("CAD")
+
+  // Québec: GST (TPS) and QST (TVQ) shown as separate lines; taxRate = gstRate + qstRate.
+  // Psychotherapy is exempt, so these stay 0 unless the practice bills taxable services.
+  gstRate Decimal @default(0) @db.Decimal(6, 3)
+  qstRate Decimal @default(0) @db.Decimal(6, 3)
 
   // Drives currency default, phone format, legal fields and invoice wording (src/lib/regions.ts)
   region String @default("CA-QC") // "CA-QC" | "FR"
+
+  // Interface and email language for the practice and its patients
+  language String @default("fr") // "fr" | "en"
+
+  // Day-before session reminder emails to patients
+  sessionRemindersEnabled Boolean @default(true)
 
   // Hourly rates for non-therapy work (time filled per half hour)
   hourlyRateAdmin   Decimal @default(0) @db.Decimal(10, 2)
@@ -103,6 +114,7 @@ model Workspace {
   patientInvites PatientInvite[]
   rateChanges    PatientRateChange[]
   messages       Message[]
+  statements     Statement[]
 }
 
 // ---------------------------------------------------------------------------
@@ -168,6 +180,9 @@ model Patient {
   // General (non-session) notes visible to practitioners
   backgroundNotes String?
 
+  // Day-before session reminder emails (practice setting must also be on)
+  remindersEnabled Boolean @default(true)
+
   // Soft delete: set when the practitioner deletes the patient. The record moves to
   // "Recently deleted" (history and invoices kept) until restored or permanently deleted.
   deletedAt DateTime?
@@ -183,6 +198,7 @@ model Patient {
   invites      PatientInvite[]
   rateChanges  PatientRateChange[]
   messages     Message[]
+  statements   Statement[]
 
   @@index([workspaceId])
   @@index([workspaceId, lastName])
@@ -216,7 +232,13 @@ model Appointment {
   // hourlyRate × duration for hourly work (recomputed when the time changes)
   tariffAmount Decimal  @db.Decimal(10, 2)
   hourlyRate   Decimal? @db.Decimal(10, 2)
-  taxRate      Decimal  @db.Decimal(5, 2)
+  taxRate      Decimal  @db.Decimal(6, 3)
+
+  // Recurring sessions booked together share a seriesId (weekly / every 2 weeks)
+  seriesId String?
+
+  // Day-before reminder email to the patient
+  reminderSentAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -229,6 +251,7 @@ model Appointment {
 
   @@index([workspaceId])
   @@index([workspaceId, startTime])
+  @@index([seriesId])
   @@index([patientId])
   @@index([practitionerId])
 }
@@ -329,7 +352,10 @@ model Invoice {
   invoiceNumber String // sequential per workspace and year: INV-2026-0001
   amount        Decimal @db.Decimal(10, 2)
   taxAmount     Decimal @db.Decimal(10, 2)
-  taxRate       Decimal @db.Decimal(5, 2)
+  taxRate       Decimal @db.Decimal(6, 3)
+  // Separate tax lines when the region has several taxes (Québec: TPS + TVQ):
+  // [{ label: "TPS", rate: 5, amount: 6.5 }, …]. Null = a single tax line.
+  taxLines      Json?
   totalAmount   Decimal @db.Decimal(10, 2)
   notes         String?
   publicToken   String  @unique @default(uuid())
@@ -337,6 +363,7 @@ model Invoice {
   status  InvoiceStatus @default(DRAFT)
   dueDate DateTime
 
+  sentAt         DateTime? // emailed to the patient (status SENT)
   paidAt         DateTime?
   receiptSentAt  DateTime? // last time the receipt (quittance) was emailed
   reminderSentAt DateTime? // last dunning reminder timestamp
@@ -371,6 +398,24 @@ model PatientRateChange {
 
   @@index([workspaceId, notifiedAt])
   @@index([patientId, effectiveFrom])
+}
+
+// Statement of payments for a patient over a period (e.g. a year, for insurance
+// claims). Created when shared; the public page lists the paid invoices in range.
+model Statement {
+  id          String   @id @default(cuid())
+  workspaceId String
+  patientId   String
+  periodStart DateTime @db.Date
+  periodEnd   DateTime @db.Date
+  publicToken String   @unique @default(uuid())
+  sentAt      DateTime?
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  patient   Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
 }
 
 enum MessageStatus {

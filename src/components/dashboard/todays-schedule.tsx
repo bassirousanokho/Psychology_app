@@ -2,11 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { format } from "date-fns";
+import { useI18n } from "@/i18n/client";
 import { BookOpen, FileText, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -52,17 +51,17 @@ function PrepDialog({
   onOpenChange: (v: boolean) => void;
 }) {
   const prev = appt.patient.previousNote;
+  const { t, fmt } = useI18n();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>
-            Pre-session prep — {appt.patient.lastName}, {appt.patient.firstName}
+            {t("prep.title", { name: `${appt.patient.lastName}, ${appt.patient.firstName}` })}
           </DialogTitle>
           <DialogDescription>
-            {format(new Date(appt.startTime), "HH:mm")} –{" "}
-            {format(new Date(appt.endTime), "HH:mm")} today
+            {t("prep.today", { start: fmt(appt.startTime, "HH:mm"), end: fmt(appt.endTime, "HH:mm") })}
           </DialogDescription>
         </DialogHeader>
 
@@ -71,7 +70,7 @@ function PrepDialog({
           {appt.patient.backgroundNotes && (
             <section>
               <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                Patient Background
+                {t("prep.background")}
               </h4>
               <p className="rounded-lg bg-muted/50 p-3 text-sm leading-relaxed whitespace-pre-wrap">
                 {appt.patient.backgroundNotes}
@@ -82,22 +81,22 @@ function PrepDialog({
           {/* Previous session notes */}
           <section>
             <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-              Previous Session
+              {t("prep.previous")}
             </h4>
             {prev ? (
               <div>
                 <p className="mb-1.5 text-xs text-muted-foreground">
-                  {format(new Date(prev.startTime), "EEEE d MMMM yyyy")}
+                  {fmt(prev.startTime, "EEEE d MMMM yyyy")}
                 </p>
                 <p className="rounded-lg bg-muted/50 p-3 text-sm leading-relaxed whitespace-pre-wrap max-h-64 overflow-y-auto">
                   {prev.sessionNotes || (
-                    <span className="italic text-muted-foreground">No notes recorded.</span>
+                    <span className="italic text-muted-foreground">{t("prep.noNotes")}</span>
                   )}
                 </p>
               </div>
             ) : (
               <p className="rounded-lg bg-muted/50 p-3 text-sm text-muted-foreground italic">
-                No previous completed sessions found for this patient.
+                {t("prep.noPrevious")}
               </p>
             )}
           </section>
@@ -106,7 +105,7 @@ function PrepDialog({
           <div className="flex justify-end pt-2">
             <Button render={<Link href={`/dashboard/appointments/${appt.id}`} />}>
               <FileText className="mr-2 h-4 w-4" />
-              Open session workspace
+              {t("prep.open")}
             </Button>
           </div>
         </div>
@@ -119,12 +118,13 @@ function PrepDialog({
 
 export function TodaysSchedule({ appointments }: { appointments: TodayAppointment[] }) {
   const [prepAppt, setPrepAppt] = useState<TodayAppointment | null>(null);
+  const { t, tp, fmt } = useI18n();
 
   if (appointments.length === 0) {
     return (
       <div className="rounded-xl border bg-card p-6">
-        <h3 className="mb-1 font-semibold">Today&apos;s Schedule</h3>
-        <p className="text-sm text-muted-foreground">No appointments scheduled for today.</p>
+        <h3 className="mb-1 font-semibold">{t("today.title")}</h3>
+        <p className="text-sm text-muted-foreground">{t("today.empty")}</p>
       </div>
     );
   }
@@ -133,9 +133,9 @@ export function TodaysSchedule({ appointments }: { appointments: TodayAppointmen
     <>
       <div className="rounded-xl border bg-card">
         <div className="flex items-center justify-between border-b px-5 py-3">
-          <h3 className="font-semibold">Today&apos;s Schedule</h3>
+          <h3 className="font-semibold">{t("today.title")}</h3>
           <span className="text-xs text-muted-foreground">
-            {appointments.length} appointment{appointments.length !== 1 ? "s" : ""}
+            {tp(appointments.length, "today.count")}
           </span>
         </div>
 
@@ -145,10 +145,10 @@ export function TodaysSchedule({ appointments }: { appointments: TodayAppointmen
               {/* Time */}
               <div className="w-16 shrink-0 text-center">
                 <p className="text-sm font-semibold tabular-nums">
-                  {format(new Date(appt.startTime), "HH:mm")}
+                  {fmt(appt.startTime, "HH:mm")}
                 </p>
                 <p className="text-xs text-muted-foreground tabular-nums">
-                  {format(new Date(appt.endTime), "HH:mm")}
+                  {fmt(appt.endTime, "HH:mm")}
                 </p>
               </div>
 
@@ -163,7 +163,7 @@ export function TodaysSchedule({ appointments }: { appointments: TodayAppointmen
                     STATUS_STYLES[appt.status],
                   )}
                 >
-                  {appt.status.charAt(0) + appt.status.slice(1).toLowerCase().replace("_", "-")}
+                  {t(`status.${appt.status}`)}
                 </span>
               </div>
 
@@ -177,7 +177,7 @@ export function TodaysSchedule({ appointments }: { appointments: TodayAppointmen
                     className="h-8 text-xs"
                   >
                     <BookOpen className="mr-1.5 h-3.5 w-3.5" />
-                    Prep
+                    {t("today.prep")}
                   </Button>
                 )}
                 <Button

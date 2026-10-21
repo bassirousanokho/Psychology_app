@@ -11,6 +11,7 @@ import {
 } from "react-hook-form";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/i18n/client";
 
 // Re-export FormProvider as Form
 const Form = FormProvider;
@@ -118,7 +119,9 @@ function FormDescription({ className, ...props }: React.ComponentProps<"p">) {
 
 function FormMessage({ className, children, ...props }: React.ComponentProps<"p">) {
   const { error, formMessageId } = useFormField();
-  const body = error ? String(error.message ?? error) : children;
+  const { tError } = useI18n();
+  // Validation messages are written in English; shown in the practice's language
+  const body = error ? tError(String(error.message ?? error)) : children;
   if (!body) return null;
   return (
     <p

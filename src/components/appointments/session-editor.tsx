@@ -1,11 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback, useTransition } from "react";
-import { format } from "date-fns";
 import {
   CheckCircle2,
-  Clock,
-  FileEdit,
   Loader2,
   RotateCcw,
   Save,
@@ -18,8 +15,8 @@ import {
 } from "@/app/(dashboard)/dashboard/appointments/[id]/actions";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/i18n/client";
 import { isHourly, type SessionType } from "@/lib/session-types";
 
 type SaveIndicator = "idle" | "saving" | "saved" | "error";
@@ -47,6 +44,7 @@ interface SessionEditorProps {
 // ── Save indicator ────────────────────────────────────────────────────────────
 
 function SaveIndicator({ state }: { state: SaveIndicator }) {
+  const { t } = useI18n();
   if (state === "idle") return null;
   return (
     <span
@@ -59,7 +57,7 @@ function SaveIndicator({ state }: { state: SaveIndicator }) {
     >
       {state === "saving" && <Loader2 className="h-3 w-3 animate-spin" />}
       {state === "saved"  && <CheckCircle2 className="h-3 w-3" />}
-      {state === "saving" ? "Saving…" : state === "saved" ? "Saved" : "Save failed"}
+      {state === "saving" ? t("editor.saving") : state === "saved" ? t("editor.saved") : t("editor.saveFailed")}
     </span>
   );
 }
@@ -70,6 +68,7 @@ export function SessionEditor({ appointment }: SessionEditorProps) {
   const [notes, setNotes]         = useState(appointment.sessionNotes ?? "");
   const [saveState, setSaveState] = useState<SaveIndicator>("idle");
   const [isPending, startTransition] = useTransition();
+  const { t, tp, fmt, tError } = useI18n();
 
   const isCompleted = appointment.noteCompletedAt !== null;
   // Therapy sessions need typed notes or an uploaded note file; hourly work needs neither
@@ -103,7 +102,7 @@ export function SessionEditor({ appointment }: SessionEditorProps) {
       if (result.success) {
         setTimeout(() => setSaveState("idle"), 2500);
       } else {
-        toast.error(result.error);
+        toast.error(tError(result.error));
       }
     });
   }
@@ -113,9 +112,9 @@ export function SessionEditor({ appointment }: SessionEditorProps) {
     startTransition(async () => {
       const result = await completeSession(appointment.id, notes);
       if (result.success) {
-        toast.success("Session marked as completed");
+        toast.success(t("editor.completedToast"));
       } else {
-        toast.error(result.error);
+        toast.error(tError(result.error));
       }
     });
   }
@@ -125,9 +124,9 @@ export function SessionEditor({ appointment }: SessionEditorProps) {
     startTransition(async () => {
       const result = await reopenSession(appointment.id);
       if (result.success) {
-        toast.success("Session reopened");
+        toast.success(t("editor.reopenedToast"));
       } else {
-        toast.error(result.error);
+        toast.error(tError(result.error));
       }
     });
   }
@@ -138,7 +137,7 @@ export function SessionEditor({ appointment }: SessionEditorProps) {
       {appointment.patient.backgroundNotes && (
         <section className="rounded-xl border bg-muted/40 p-5">
           <h3 className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            Patient Background
+            {t("editor.background")}
           </h3>
           <p className="whitespace-pre-wrap text-sm leading-relaxed">
             {appointment.patient.backgroundNotes}
@@ -152,11 +151,10 @@ export function SessionEditor({ appointment }: SessionEditorProps) {
           <CheckCircle2 className="h-5 w-5 shrink-0 text-green-600" />
           <div className="flex-1">
             <p className="text-sm font-medium text-green-900 dark:text-green-200">
-              Session completed
+              {t("editor.completed")}
             </p>
             <p className="text-xs text-green-700 dark:text-green-400">
-              Notes finalised on{" "}
-              {format(new Date(appointment.noteCompletedAt!), "EEEE d MMMM yyyy 'at' HH:mm")}
+              {t("editor.finalised", { date: fmt(appointment.noteCompletedAt!, "EEEE d MMMM yyyy, HH:mm") })}
             </p>
           </div>
           <Button
@@ -167,7 +165,7 @@ export function SessionEditor({ appointment }: SessionEditorProps) {
             disabled={isPending}
           >
             <RotateCcw className="mr-1 h-3.5 w-3.5" />
-            Reopen
+            {t("editor.reopen")}
           </Button>
         </div>
       )}
@@ -176,7 +174,7 @@ export function SessionEditor({ appointment }: SessionEditorProps) {
       <section>
         <div className="mb-2 flex items-center justify-between">
           <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            Session Notes
+            {t("editor.notes")}
           </h3>
           <SaveIndicator state={saveState} />
         </div>
@@ -184,22 +182,18 @@ export function SessionEditor({ appointment }: SessionEditorProps) {
         <Textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          placeholder={
-            isCompleted
-              ? "No notes recorded for this session."
-              : "Write your session notes here…\n\nConsider covering: presenting issue, affect & mood, key themes, interventions used, patient response, homework set, risk assessment, plan for next session."
-          }
+          placeholder={isCompleted ? t("editor.placeholderCompleted") : t("editor.placeholder")}
           className={cn(
             "min-h-[400px] resize-y font-[inherit] text-base leading-relaxed",
             "placeholder:text-muted-foreground/50",
             isCompleted && "cursor-default bg-muted/30",
           )}
           disabled={isCompleted}
-          aria-label="Session notes"
+          aria-label={t("editor.notes")}
         />
 
         <p className="mt-1.5 text-right text-xs text-muted-foreground">
-          {notes.trim().split(/\s+/).filter(Boolean).length} words
+          {tp(notes.trim().split(/\s+/).filter(Boolean).length, "editor.words")}
         </p>
       </section>
 
@@ -216,7 +210,7 @@ export function SessionEditor({ appointment }: SessionEditorProps) {
             ) : (
               <Save className="mr-2 h-4 w-4" />
             )}
-            Save draft
+            {t("editor.saveDraft")}
           </Button>
 
           <Button
@@ -229,12 +223,12 @@ export function SessionEditor({ appointment }: SessionEditorProps) {
             ) : (
               <CheckCircle2 className="mr-2 h-4 w-4" />
             )}
-            Mark as completed
+            {t("editor.complete")}
           </Button>
 
           {!canComplete && (
             <p className="text-xs text-muted-foreground">
-              Write a few words or upload a note file before completing.
+              {t("editor.needContent")}
             </p>
           )}
         </div>

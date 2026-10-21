@@ -5,14 +5,15 @@ import { usePathname } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
 import { CalendarPlus, CalendarDays, FileText, FolderOpen, LayoutDashboard } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/i18n/client";
 
 const NAV_ITEMS = [
-  { href: "/portal/dashboard",     label: "Home",           icon: LayoutDashboard },
-  { href: "/portal/book",          label: "Book session",   icon: CalendarPlus },
-  { href: "/portal/appointments",  label: "Appointments",   icon: CalendarDays },
-  { href: "/portal/invoices",      label: "Invoices",       icon: FileText },
-  { href: "/portal/documents",     label: "Documents",      icon: FolderOpen },
-];
+  { href: "/portal/dashboard",    label: "portal.nav.home",         icon: LayoutDashboard },
+  { href: "/portal/book",         label: "portal.nav.book",         icon: CalendarPlus },
+  { href: "/portal/appointments", label: "portal.nav.appointments", icon: CalendarDays },
+  { href: "/portal/invoices",     label: "portal.nav.invoices",     icon: FileText },
+  { href: "/portal/documents",    label: "portal.nav.documents",    icon: FolderOpen },
+] as const;
 
 interface PortalNavProps {
   practiceName: string;
@@ -21,13 +22,14 @@ interface PortalNavProps {
 
 export function PortalNav({ practiceName, patientName }: PortalNavProps) {
   const pathname = usePathname();
+  const { t } = useI18n();
 
   return (
     <nav className="flex h-full flex-col border-r bg-card">
       {/* Header */}
       <div className="border-b px-5 py-4">
         <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-          Patient Portal
+          {t("portal.title")}
         </p>
         <p className="mt-0.5 truncate font-semibold text-sm">{practiceName}</p>
       </div>
@@ -48,7 +50,7 @@ export function PortalNav({ practiceName, patientName }: PortalNavProps) {
                 )}
               >
                 <Icon className="h-4 w-4 shrink-0" />
-                {label}
+                {t(label)}
               </Link>
             </li>
           );

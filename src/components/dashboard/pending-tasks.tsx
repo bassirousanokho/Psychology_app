@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { formatDistanceToNow, format } from "date-fns";
+import { formatDistanceToNow } from "date-fns";
+import { useI18n } from "@/i18n/client";
 import { AlertCircle, ArrowRight, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -20,15 +21,16 @@ interface PendingTasksProps {
 }
 
 export function PendingTasks({ appointments }: PendingTasksProps) {
+  const { t, tp, fmt, dateLocale } = useI18n();
   if (appointments.length === 0) {
     return (
       <div className="rounded-xl border bg-card p-6">
         <div className="flex items-start gap-3">
           <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-green-500" />
           <div>
-            <h3 className="font-semibold">Missing Notes</h3>
+            <h3 className="font-semibold">{t("pending.title")}</h3>
             <p className="mt-0.5 text-sm text-muted-foreground">
-              All sessions are documented. Great work!
+              {t("pending.allDone")}
             </p>
           </div>
         </div>
@@ -41,9 +43,9 @@ export function PendingTasks({ appointments }: PendingTasksProps) {
       {/* Header */}
       <div className="flex items-center gap-2 border-b px-5 py-3">
         <AlertCircle className="h-4 w-4 text-amber-500" />
-        <h3 className="font-semibold">Missing Notes</h3>
+        <h3 className="font-semibold">{t("pending.title")}</h3>
         <span className="ml-auto text-xs text-muted-foreground">
-          {appointments.length} session{appointments.length !== 1 ? "s" : ""} pending
+          {tp(appointments.length, "pending.count")}
         </span>
       </div>
 
@@ -52,7 +54,7 @@ export function PendingTasks({ appointments }: PendingTasksProps) {
         {appointments.map((appt) => {
           const start     = new Date(appt.startTime);
           const end       = new Date(appt.endTime);
-          const hoursAgo  = formatDistanceToNow(end, { addSuffix: true });
+          const hoursAgo  = formatDistanceToNow(end, { addSuffix: true, locale: dateLocale });
 
           return (
             <li key={appt.id} className="flex items-center gap-4 px-5 py-3 group">
@@ -65,7 +67,7 @@ export function PendingTasks({ appointments }: PendingTasksProps) {
                   {appt.patient.lastName}, {appt.patient.firstName}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {format(start, "EEE d MMM, HH:mm")} &middot; ended {hoursAgo}
+                  {t("pending.ended", { date: fmt(start, "EEE d MMM, HH:mm"), ago: hoursAgo })}
                 </p>
               </div>
 
@@ -76,7 +78,7 @@ export function PendingTasks({ appointments }: PendingTasksProps) {
                 className="h-8 text-xs [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
                 render={<Link href={`/dashboard/appointments/${appt.id}`} />}
               >
-                Write notes
+                {t("pending.write")}
                 <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
               </Button>
             </li>
@@ -87,9 +89,9 @@ export function PendingTasks({ appointments }: PendingTasksProps) {
       {appointments.length > 5 && (
         <div className="border-t px-5 py-3">
           <p className="text-xs text-muted-foreground">
-            Showing {appointments.length} pending sessions.{" "}
+            {t("pending.showing", { count: appointments.length })}{" "}
             <Link href="/dashboard/notes" className="underline underline-offset-2">
-              View all
+              {t("pending.viewAll")}
             </Link>
           </p>
         </div>

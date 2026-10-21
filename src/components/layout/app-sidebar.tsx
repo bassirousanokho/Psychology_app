@@ -26,14 +26,17 @@ import {
   SidebarSeparator,
 } from "@/components/ui/sidebar";
 import { Badge } from "@/components/ui/badge";
+import { useI18n } from "@/i18n/client";
+import type { MessageKey } from "@/i18n/messages";
+import type { LucideIcon } from "lucide-react";
 
-const navItems = [
-  { label: "Overview",       href: "/dashboard",          icon: LayoutDashboard },
-  { label: "Calendar",       href: "/dashboard/calendar", icon: CalendarDays },
-  { label: "Patients",       href: "/dashboard/patients", icon: Users },
-  { label: "Clinical Notes", href: "/dashboard/notes",    icon: FileText, showBadge: true },
-  { label: "Billing",        href: "/dashboard/billing",  icon: Receipt },
-];
+const navItems: { label: MessageKey; href: string; icon: LucideIcon; showBadge?: boolean }[] = [
+  { label: "nav.overview", href: "/dashboard",          icon: LayoutDashboard },
+  { label: "nav.calendar", href: "/dashboard/calendar", icon: CalendarDays },
+  { label: "nav.patients", href: "/dashboard/patients", icon: Users },
+  { label: "nav.notes",    href: "/dashboard/notes",    icon: FileText, showBadge: true },
+  { label: "nav.billing",  href: "/dashboard/billing",  icon: Receipt },
+]
 
 interface AppSidebarProps {
   workspaceName: string;
@@ -42,6 +45,7 @@ interface AppSidebarProps {
 
 export function AppSidebar({ workspaceName, pendingNotes = 0 }: AppSidebarProps) {
   const pathname = usePathname();
+  const { t } = useI18n();
 
   return (
     <Sidebar>
@@ -57,7 +61,7 @@ export function AppSidebar({ workspaceName, pendingNotes = 0 }: AppSidebarProps)
 
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Navigation</SidebarGroupLabel>
+          <SidebarGroupLabel>{t("nav.navigation")}</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {navItems.map((item) => {
@@ -74,7 +78,7 @@ export function AppSidebar({ workspaceName, pendingNotes = 0 }: AppSidebarProps)
                     >
                       <span className="flex items-center gap-2">
                         <item.icon className="h-4 w-4" />
-                        {item.label}
+                        {t(item.label)}
                       </span>
                       {badge > 0 && (
                         <Badge variant="destructive" className="h-5 px-1.5 text-xs">
@@ -92,7 +96,7 @@ export function AppSidebar({ workspaceName, pendingNotes = 0 }: AppSidebarProps)
         <SidebarSeparator />
 
         <SidebarGroup>
-          <SidebarGroupLabel>Workspace</SidebarGroupLabel>
+          <SidebarGroupLabel>{t("nav.workspace")}</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
@@ -101,7 +105,7 @@ export function AppSidebar({ workspaceName, pendingNotes = 0 }: AppSidebarProps)
                   render={<Link href="/dashboard/settings" />}
                 >
                   <Settings className="h-4 w-4" />
-                  Settings
+                  {t("nav.settings")}
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>

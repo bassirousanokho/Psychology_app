@@ -51,6 +51,7 @@ export function patientSchemaFor(country: CountryCode) {
       .optional()
       .refine((v) => !v?.trim() || (!isNaN(Number(v)) && Number(v) >= 0), "Enter a valid amount"),
     backgroundNotes: z.string().optional(),
+    remindersEnabled: z.boolean().optional(),
   });
 }
 

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { differenceInMinutes, format } from "date-fns";
+import { differenceInMinutes } from "date-fns";
 import { toast } from "sonner";
 import {
   Ban,
@@ -14,6 +14,8 @@ import {
   UserX,
 } from "lucide-react";
 import {
+  cancelFollowingInSeries,
+  countFollowingInSeries,
   deleteAppointment,
   updateAppointmentStatus,
 } from "@/app/(dashboard)/dashboard/calendar/actions";
@@ -27,16 +29,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { isHourly, SESSION_TYPE_LABELS } from "@/lib/session-types";
+import { isHourly } from "@/lib/session-types";
+import { useI18n } from "@/i18n/client";
+import type { I18n } from "@/i18n/core";
 import { BookingForm, type Availability } from "./booking-dialog";
 import type { CalendarAppointment } from "./week-calendar";
-
-const STATUS_LABELS: Record<CalendarAppointment["status"], string> = {
-  SCHEDULED: "Scheduled",
-  COMPLETED: "Completed",
-  CANCELLED: "Cancelled",
-  NO_SHOW: "No-show",
-};
 
 const STATUS_VARIANTS: Record<
   CalendarAppointment["status"],
@@ -93,6 +90,7 @@ function AppointmentPanel({
   onClose: () => void;
 }) {
   const [view, setView] = useState<"details" | "reschedule">("details");
+  const { t, tp, fmt, tError } = useI18n();
   const [confirm, setConfirm] = useState<Confirm>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -114,6 +112,15 @@ function AppointmentPanel({
   const feeValue = Number(fee);
   const feeValid = !chargeFee || (fee.trim() !== "" && Number.isFinite(feeValue) && feeValue >= 0);
 
+  // Series: offer to cancel the following sessions too
+  const [followingCount, setFollowingCount] = useState(0);
+  const [cancelFollowing, setCancelFollowing] = useState(false);
+
+  function openCancel() {
+    setConfirm("cancel");
+    if (appt.seriesId) countFollowingInSeries(appt.id).then(setFollowingCount);
+  }
+
   function run(action: () => Promise<{ success: boolean; error?: string }>, ok: string) {
     startTransition(async () => {
       const result = await action();
@@ -121,7 +128,7 @@ function AppointmentPanel({
         toast.success(ok);
         onClose();
       } else {
-        toast.error(result.error ?? "Something went wrong");
+        toast.error(tError(result.error));
         setConfirm(null);
       }
     });
@@ -131,8 +138,8 @@ function AppointmentPanel({
     return (
       <>
         <DialogHeader>
-          <DialogTitle>Reschedule session</DialogTitle>
-          <DialogDescription>Pick a new date, duration or start time.</DialogDescription>
+          <DialogTitle>{t("panel.rescheduleTitle")}</DialogTitle>
+          <DialogDescription>{t("panel.rescheduleBody")}</DialogDescription>
         </DialogHeader>
         <BookingForm
           patients={[]}
@@ -156,12 +163,12 @@ function AppointmentPanel({
       <DialogHeader>
         <DialogTitle className="flex flex-wrap items-center gap-2">
           {appt.patient.lastName}, {appt.patient.firstName}
-          {hourly && <Badge variant="outline">{SESSION_TYPE_LABELS[appt.type]}</Badge>}
-          <Badge variant={STATUS_VARIANTS[appt.status]}>{STATUS_LABELS[appt.status]}</Badge>
+          {hourly && <Badge variant="outline">{t(`type.${appt.type}`)}</Badge>}
+          <Badge variant={STATUS_VARIANTS[appt.status]}>{t(`status.${appt.status}`)}</Badge>
         </DialogTitle>
         <DialogDescription>
-          {format(start, "EEEE d MMMM yyyy")} · {format(start, "HH:mm")}–{format(end, "HH:mm")} (
-          {differenceInMinutes(end, start)} min)
+          {fmt(start, "EEEE d MMMM yyyy")} · {fmt(start, "HH:mm")}–{fmt(end, "HH:mm")} (
+          {t("common.min", { count: differenceInMinutes(end, start) })})
         </DialogDescription>
       </DialogHeader>
 
@@ -170,17 +177,19 @@ function AppointmentPanel({
           {confirm === "cancel" ? (
             <>
               <p className="text-sm">
-                Cancel {patientName}&apos;s {hourly ? SESSION_TYPE_LABELS[appt.type].toLowerCase() : "session"}?
-                {!hourly && " The slot becomes free again."}
+                {hourly
+                  ? t("panel.cancelQuestionHourly", { name: patientName, type: t(`type.${appt.type}`).toLowerCase() })
+                  : t("panel.cancelQuestion", { name: patientName })}
+                {!hourly && t("panel.slotFree")}
               </p>
               {!hourly && (
                 <div className="space-y-3 rounded-lg border p-3">
                   <p className="text-xs text-muted-foreground">
                     {hoursBefore > 0
-                      ? `Cancelled ${formatNotice(hoursBefore)} before the session`
-                      : "The session has already started"}
-                    {" · "}your notice period is {cancellationNoticeHours} h
-                    {hoursBefore > 0 && hoursBefore < cancellationNoticeHours && " (inside the notice period)"}.
+                      ? t("panel.cancelledBefore", { notice: formatNotice(hoursBefore, t) })
+                      : t("panel.alreadyStarted")}
+                    {t("panel.notice", { hours: cancellationNoticeHours })}
+                    {hoursBefore > 0 && hoursBefore < cancellationNoticeHours && t("panel.insideNotice")}.
                   </p>
                   <label className="flex items-center gap-2 text-sm font-medium">
                     <input
@@ -189,7 +198,7 @@ function AppointmentPanel({
                       onChange={(e) => setChargeFee(e.target.checked)}
                       className="h-4 w-4"
                     />
-                    Charge a cancellation fee
+                    {t("panel.chargeFee")}
                   </label>
                   {chargeFee && (
                     <div className="flex items-center gap-2">
@@ -200,20 +209,31 @@ function AppointmentPanel({
                         value={fee}
                         onChange={(e) => setFee(e.target.value)}
                         className="h-8 w-32"
-                        aria-label="Cancellation fee"
+                        aria-label={t("panel.fee")}
                       />
                       <span className="text-sm text-muted-foreground">{availability.currency}</span>
                     </div>
                   )}
                 </div>
               )}
+              {followingCount > 0 && (
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={cancelFollowing}
+                    onChange={(e) => setCancelFollowing(e.target.checked)}
+                    className="h-4 w-4"
+                  />
+                  {tp(followingCount, "panel.alsoFollowing")}
+                </label>
+              )}
             </>
           ) : (
-            <p className="text-sm">Delete this session permanently? Use this only for a booking made by mistake.</p>
+            <p className="text-sm">{t("panel.deleteQuestion")}</p>
           )}
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setConfirm(null)} disabled={isPending}>
-              Back
+              {t("common.back")}
             </Button>
             <Button
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
@@ -221,19 +241,27 @@ function AppointmentPanel({
               onClick={() =>
                 confirm === "cancel"
                   ? run(
-                      () =>
-                        updateAppointmentStatus(appt.id, "CANCELLED", {
+                      async () => {
+                        const result = await updateAppointmentStatus(appt.id, "CANCELLED", {
                           cancellationFee: !hourly && chargeFee ? feeValue : null,
-                        }),
-                      !hourly && chargeFee && feeValue > 0
-                        ? "Cancelled — fee to invoice from the session page"
-                        : "Session cancelled",
+                        });
+                        if (result.success && cancelFollowing && followingCount > 0) {
+                          const following = await cancelFollowingInSeries(appt.id);
+                          if (!following.success) return following;
+                        }
+                        return result;
+                      },
+                      cancelFollowing && followingCount > 0
+                        ? t("panel.cancelledMany", { count: followingCount + 1 })
+                        : !hourly && chargeFee && feeValue > 0
+                        ? t("panel.cancelledWithFee")
+                        : t("panel.cancelled"),
                     )
-                  : run(() => deleteAppointment(appt.id), "Session deleted")
+                  : run(() => deleteAppointment(appt.id), t("panel.deleted"))
               }
             >
               {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {confirm === "cancel" ? "Cancel session" : "Delete session"}
+              {confirm === "cancel" ? t("panel.cancelSession") : t("panel.deleteSession")}
             </Button>
           </div>
         </div>
@@ -241,13 +269,13 @@ function AppointmentPanel({
         <div className="space-y-2 pt-2">
           <Button className="w-full justify-start" render={<Link href={`/dashboard/appointments/${appt.id}`} />}>
             <FileText className="mr-2 h-4 w-4" />
-            Open session notes
+            {t("panel.openNotes")}
           </Button>
 
           {canMove && (
             <Button variant="outline" className="w-full justify-start" onClick={() => setView("reschedule")}>
               <CalendarClock className="mr-2 h-4 w-4" />
-              Reschedule
+              {t("panel.reschedule")}
             </Button>
           )}
 
@@ -256,17 +284,17 @@ function AppointmentPanel({
               variant="outline"
               className="w-full justify-start"
               disabled={isPending}
-              onClick={() => run(() => updateAppointmentStatus(appt.id, "NO_SHOW"), "Marked as no-show")}
+              onClick={() => run(() => updateAppointmentStatus(appt.id, "NO_SHOW"), t("panel.markedNoShow"))}
             >
               <UserX className="mr-2 h-4 w-4" />
-              Mark as no-show
+              {t("panel.markNoShow")}
             </Button>
           )}
 
           {isScheduled && (
-            <Button variant="outline" className="w-full justify-start" onClick={() => setConfirm("cancel")}>
+            <Button variant="outline" className="w-full justify-start" onClick={openCancel}>
               <Ban className="mr-2 h-4 w-4" />
-              Cancel session
+              {t("panel.cancelSession")}
             </Button>
           )}
 
@@ -275,10 +303,10 @@ function AppointmentPanel({
               variant="outline"
               className="w-full justify-start"
               disabled={isPending}
-              onClick={() => run(() => updateAppointmentStatus(appt.id, "SCHEDULED"), "Session restored")}
+              onClick={() => run(() => updateAppointmentStatus(appt.id, "SCHEDULED"), t("panel.restored"))}
             >
               <RotateCcw className="mr-2 h-4 w-4" />
-              Restore as scheduled
+              {t("panel.restore")}
             </Button>
           )}
 
@@ -289,15 +317,15 @@ function AppointmentPanel({
               onClick={() => setConfirm("delete")}
             >
               <Trash2 className="mr-2 h-4 w-4" />
-              Delete (booked by mistake)
+              {t("panel.deleteMistake")}
             </Button>
           )}
 
           {(appt.status === "COMPLETED" || appt.invoiced) && (
             <p className="pt-1 text-xs text-muted-foreground">
               {appt.invoiced
-                ? "This session is invoiced: open it to see the invoice."
-                : "Completed sessions are changed from the session page (Reopen)."}
+                ? t("panel.invoicedHint")
+                : t("panel.completedHint")}
             </p>
           )}
         </div>
@@ -306,8 +334,8 @@ function AppointmentPanel({
   );
 }
 
-function formatNotice(hours: number): string {
-  if (hours < 1) return `${Math.max(1, Math.round(hours * 60))} min`;
-  if (hours < 48) return `${Math.round(hours)} h`;
-  return `${Math.round(hours / 24)} days`;
+function formatNotice(hours: number, t: I18n["t"]): string {
+  if (hours < 1) return t("notice.minutes", { count: Math.max(1, Math.round(hours * 60)) });
+  if (hours < 48) return t("notice.hours", { count: Math.round(hours) });
+  return t("notice.days", { count: Math.round(hours / 24) });
 }

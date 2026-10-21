@@ -749,6 +749,57 @@ Recette now runs at **https://psy-app-804784013458.northamerica-northeast1.run.a
 
 ---
 
+## 16. Daily-practice batch (2026-10-23)
+
+### 16.1 Settings and calendar basics
+
+- [ ] Settings → **Practice name** can be changed; the sidebar updates; invoices use it when "Name as printed" is empty.
+- [ ] Calendar rows follow your working hours (e.g. 09:00–17:30 shows 09:00–18:00) and extend automatically to show any session outside them; at least 6 hours are always visible.
+- [ ] Portal self-booking: with a session 10:30–11:30, both 10:00 and 11:00 slots are shown as taken.
+
+### 16.2 Billing
+
+- [ ] Billing filters: All / Unpaid / Overdue / Paid; pagination (25 per page) with Previous / Next.
+- [ ] **Send** on an unpaid invoice emails it (French or English per practice language) and marks it Sent; without Resend: "No email provider is configured: the invoice was not sent" and the status doesn't change. Button becomes **Resend** (tooltip: last sent date).
+- [ ] **Undo paid** (↶ on a paid row, and "Mark as unpaid" on the session page) asks for confirmation and returns the invoice to Draft.
+- [ ] Québec practice with GST 5 % and QST 9.975 % (Settings → Billing): new sessions get 14.975 %, the invoice shows separate **TPS (5 %)** and **TVQ (9,975 %)** lines, "Sous-total" and "Total (taxes incluses)". France keeps a single tax rate field.
+- [ ] **Accounting export**: pick a year → "Invoices (CSV)" lists every invoice issued that year; "Monthly summary (CSV)" shows invoiced and collected amounts per month plus a total. French practices: semicolons and decimal commas, opens correctly in Excel (accents OK).
+- [ ] **Statement for insurance** (patient file): "This year" / "Last year" or custom dates → **View** opens a printable "Relevé de paiements" with permit number, every payment in the period and the total; **Email to patient** sends the link.
+
+### 16.3 Clinical Notes page
+
+- [ ] Tabs **Missing notes / Drafts / Completed / All**; filters by patient (deleted patients included, marked), date range, and words in the notes.
+- [ ] Each row: date, time, patient, type, excerpt (or "N note files"), status badge; clicking opens the session.
+- [ ] Search finds words inside encrypted notes; "Clear" resets filters; pagination works.
+
+### 16.4 Recurring sessions
+
+- [ ] Booking dialog → **Repeat**: Every week / Every 2 weeks + number of sessions (2–52) → **Preview dates** lists each date; dates taken by another therapy session are struck through ("taken by …").
+- [ ] **Book N sessions** creates the free ones in one go (toast mentions skipped dates); each uses the patient's rate on its own date (scheduled rate changes apply).
+- [ ] Dates across a daylight-saving change keep the same local time.
+- [ ] Cancelling one session of a series offers **"Also cancel the N following sessions in this series (no fee)"**; the fee (if any) only applies to the one being cancelled.
+
+### 16.5 Appointment reminders
+
+- [ ] Settings → **Appointment reminders** on/off; patient form → "Email appointment reminders the day before" on/off.
+- [ ] Cloud Scheduler job `psy-app-session-reminders` runs daily at 10:00 Montréal time; the day before a scheduled therapy session, the patient gets a reminder in the practice language with date/time and address; reply goes to the practitioner. One email per session (re-running sends nothing new). Requires Resend.
+- [ ] Job `psy-app-dunning` runs daily at 08:00; overdue reminders are in the practice language.
+
+### 16.6 French interface
+
+- [ ] Settings → **Language**: Français (default) / English. Switching changes the whole dashboard, dates (« lundi 20 octobre »), amounts (70,00 $ / $70.00), confirmations and error messages.
+- [ ] Patient portal follows the practice's language; invitation, reminder, receipt, invoice and statement emails too.
+- [ ] Sign-in / sign-up screens (Clerk) follow the browser language (French unless the browser prefers English); the invitation and "no access" pages too.
+- [ ] Form validation errors appear in French (e.g. « Le prénom est obligatoire », « Numéro de téléphone invalide »).
+- [ ] Invoices, receipts and statements are always in French.
+
+### 16.7 Patient portal access (fixed)
+
+- [ ] Signed out, open an invitation link: the sign-up page shows (it used to redirect in a loop).
+- [ ] `/portal/sign-in` and `/portal/no-access` open without redirect loops.
+
+---
+
 ## Suspected issues
 
 Found by reading the code while writing this plan, then verified on 2026-10-15. **Confirmed** = proven by a runtime test or by unambiguous code. **Likely** = depends on the device or browser, confirm during the run. Sorted by severity.
@@ -767,13 +818,13 @@ Found by reading the code while writing this plan, then verified on 2026-10-15. 
 | 10 | 🟡 Minor | Invoice panel | Keeps its initial state after "Generate invoice", so the button stays until reload and a second click gives "Invoice already exists". | ✅ Fixed — retest | 8.1 |
 | 11 | 🟡 Minor | Documents | List keeps its initial state, so new uploads only appear after a reload. Success toast fires before the database record is saved. | ✅ Fixed — retest | 4.1 |
 | 12 | 🟡 Minor | Access control | Dashboard only checks "signed in", not "is a practitioner". Hidden today by #2 (everyone gets a workspace), but it becomes real once #2 is fixed. | ✅ Fixed — retest (patients are redirected to the portal) | 11.5 |
-| 13 | 🟡 Minor | Calendar | No overlap check for practitioner bookings; sessions outside 08:00–20:00 are drawn clamped to the edges. | ✅ Overlaps fixed (new booking flow) — clamping remains | 6.4 |
-| 14 | 🟡 Minor | Portal booking | Availability only blocks the start hour of existing appointments, so a free-looking slot can fail with "no longer available". | Confirmed (code) | 6.6 |
+| 13 | 🟡 Minor | Calendar | No overlap check for practitioner bookings; sessions outside 08:00–20:00 are drawn clamped to the edges. | ✅ Fixed — overlaps refused, grid follows working hours | 6.4, 16.1 |
+| 14 | 🟡 Minor | Portal booking | Availability only blocks the start hour of existing appointments, so a free-looking slot can fail with "no longer available". | ✅ Fixed — full overlap check | 6.6, 16.1 |
 | 15 | 🟡 Minor | Session reopen | Sets status back to Scheduled, which hides the invoice panel of an invoiced session. | ✅ Fixed — invoiced sessions stay Completed | 7.4 |
 | 16 | 🟡 Minor | Currency | `€` hard-coded on Overview stats and patient session history. | ✅ Fixed — retest | 2.4 |
 | 17 | 🟡 Minor | Documents | Delete has no confirmation; signed links expire after 15 min on an open page. | ✅ Fixed — confirmation added; links sign a fresh URL per click (+ `VIEW_DOCUMENT` audit) | 4.3, 4.5 |
-| 18 | 🟡 Minor | Billing | "Mark sent" sends no email; "Paid" can't be undone; list capped at 50 rows. | Confirmed (code) | 9.1, 9.2 |
+| 18 | 🟡 Minor | Billing | "Mark sent" sends no email; "Paid" can't be undone; list capped at 50 rows. | ✅ Fixed — Send emails the invoice, Undo paid, pagination | 9, 16.2 |
 | 19 | 🟡 Minor | Invoice content | No practitioner address / professional ID / legal mentions; tax rate printed rounded (5.5 % → "6%"). | ✅ Fixed — legal details in Settings, French invoice page, tax rate exact | 8.2, 14 |
 | 20 | ⚪ Cosmetic | Header | Header search box and notification bell do nothing. | ✅ Fixed — search works from every page, bell removed | 3.5 |
-| 21 | ⚪ Cosmetic | Notes page | Clinical Notes is a placeholder, but the sidebar badge and "View all" point to it. | Confirmed (code) | 1.4, 7.1 |
-| 22 | ⚪ Cosmetic | Practice name | Can't be changed after sign-up. | Confirmed (code) | 1.3 |
+| 21 | ⚪ Cosmetic | Notes page | Clinical Notes is a placeholder, but the sidebar badge and "View all" point to it. | ✅ Fixed — full Clinical Notes page | 16.3 |
+| 22 | ⚪ Cosmetic | Practice name | Can't be changed after sign-up. | ✅ Fixed — Settings → Practice name | 16.1 |

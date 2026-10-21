@@ -5,11 +5,12 @@ import { addMinutes, format, isToday, parse } from "date-fns";
 import { CalendarPlus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/i18n/client";
 import {
   HOURLY_DURATIONS,
   HOURLY_STEP_MIN,
+  MAX_OCCURRENCES,
   SESSION_TYPES,
-  SESSION_TYPE_LABELS,
   formatDuration,
   hourlyAmount,
   isHourly,
@@ -17,8 +18,11 @@ import {
 } from "@/lib/session-types";
 import {
   createAppointment,
+  createAppointmentSeries,
   getBusyIntervals,
+  previewSeries,
   rescheduleAppointment,
+  type SeriesOccurrence,
 } from "@/app/(dashboard)/dashboard/calendar/actions";
 import type { PatientOption } from "./patient-combobox";
 import { PatientCombobox } from "./patient-combobox";
@@ -108,14 +112,13 @@ export function BookingDialog({
   open,
   onOpenChange,
 }: BookingDialogProps) {
+  const { t } = useI18n();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Book appointment</DialogTitle>
-          <DialogDescription>
-            Pick a patient, the type, a date and a duration, then choose a start time.
-          </DialogDescription>
+          <DialogTitle>{t("booking.title")}</DialogTitle>
+          <DialogDescription>{t("booking.description")}</DialogDescription>
         </DialogHeader>
         {/* Mounted only while open so every opening starts from fresh values */}
         {open && (
@@ -172,6 +175,8 @@ export function BookingForm({
       toMinutes(initialTime) + initialDuration > toMinutes(availability.workingHoursEnd));
 
   const [patientId, setPatientId] = useState("");
+  const { t, tp, fmt, tError, money: formatAmount } = useI18n();
+  const money = (n: number) => formatAmount(n, availability.currency);
   const [date, setDate] = useState(format(start0 ?? new Date(), "yyyy-MM-dd"));
   const [duration, setDuration] = useState(initialDuration);
   const [startTime, setStartTime] = useState<string | null>(initialTime);
@@ -229,12 +234,46 @@ export function BookingForm({
   const start = day && selected ? parse(selected, "HH:mm", day) : null;
   const end = start ? addMinutes(start, duration) : null;
 
+  // Recurring booking (new bookings only): preview the dates, then book them
+  const [repeatWeeks, setRepeatWeeks] = useState(0); // 0 = doesn't repeat, 1 = weekly, 2 = every 2 weeks
+  const [repeatCount, setRepeatCount] = useState(10);
+  const [preview, setPreview] = useState<SeriesOccurrence[] | null>(null);
+  const previewKey = `${patientId}|${type}|${start?.toISOString()}|${duration}|${repeatWeeks}|${repeatCount}`;
+  const [previewFor, setPreviewFor] = useState<string | null>(null);
+  const currentPreview = preview && previewFor === previewKey ? preview : null;
+  const freeCount = currentPreview?.filter((o) => !o.conflict).length ?? 0;
+  const repeating = !reschedule && repeatWeeks > 0;
+
   function handleSubmit() {
     if (!reschedule && !patientId) {
-      toast.error("Please select a patient");
+      toast.error(t("booking.selectPatientError"));
       return;
     }
     if (!start || !end) return;
+    const payload = { patientId, type, startTime: start.toISOString(), endTime: end.toISOString() };
+
+    if (repeating) {
+      startTransition(async () => {
+        if (!currentPreview) {
+          const result = await previewSeries(payload, repeatWeeks, repeatCount);
+          if (result.success) {
+            setPreview(result.occurrences);
+            setPreviewFor(previewKey);
+          } else toast.error(tError(result.error));
+          return;
+        }
+        const result = await createAppointmentSeries(payload, repeatWeeks, repeatCount);
+        if (result.success) {
+          toast.success(
+            t("booking.seriesBooked", { count: result.created }) +
+              (result.skipped.length ? t("booking.seriesSkipped", { count: result.skipped.length }) : ""),
+          );
+          onDone();
+        } else toast.error(tError(result.error));
+      });
+      return;
+    }
+
     startTransition(async () => {
       const result = reschedule
         ? await rescheduleAppointment(reschedule.appointmentId, start.toISOString(), end.toISOString())
@@ -245,10 +284,10 @@ export function BookingForm({
             endTime: end.toISOString(),
           });
       if (result.success) {
-        toast.success(reschedule ? "Appointment rescheduled" : "Appointment booked");
+        toast.success(reschedule ? t("booking.rescheduled") : t("booking.booked"));
         onDone();
       } else {
-        toast.error(result.error);
+        toast.error(tError(result.error));
         loadBusy(date); // someone may have taken the slot: refresh availability
       }
     });
@@ -258,7 +297,7 @@ export function BookingForm({
     <div className="space-y-5 pt-2">
       {/* Patient */}
       <div className="space-y-1.5">
-        <Label>Patient</Label>
+        <Label>{t("booking.patient")}</Label>
         {reschedule ? (
           <p className="text-sm font-medium">{reschedule.patientName}</p>
         ) : (
@@ -268,32 +307,31 @@ export function BookingForm({
 
       {/* Type (fixed when rescheduling) */}
       <div className="space-y-1.5">
-        <Label>Type</Label>
+        <Label>{t("booking.type")}</Label>
         {reschedule ? (
-          <p className="text-sm font-medium">{SESSION_TYPE_LABELS[type]}</p>
+          <p className="text-sm font-medium">{t(`type.${type}`)}</p>
         ) : (
           <div className="grid grid-cols-3 gap-1.5">
-            {SESSION_TYPES.map((t) => (
+            {SESSION_TYPES.map((st) => (
               <button
-                key={t}
+                key={st}
                 type="button"
-                onClick={() => handleTypeChange(t)}
+                onClick={() => handleTypeChange(st)}
                 className={cn(
                   "rounded-md border px-2 py-1.5 text-xs font-medium transition-colors",
-                  type === t
+                  type === st
                     ? "border-primary bg-primary text-primary-foreground"
                     : "border-input bg-background hover:bg-muted",
                 )}
               >
-                {SESSION_TYPE_LABELS[t]}
+                {t(`type.${st}`)}
               </button>
             ))}
           </div>
         )}
         {hourly && (
           <p className="text-xs text-muted-foreground">
-            Billed per hour ({availability.hourlyRates[type as "ADMIN" | "WRITING"].toFixed(2)}{" "}
-            {availability.currency}/h). Can overlap other sessions.
+            {t("booking.hourlyHint", { rate: money(availability.hourlyRates[type as "ADMIN" | "WRITING"]) })}
           </p>
         )}
       </div>
@@ -301,7 +339,7 @@ export function BookingForm({
       {/* Date + duration */}
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
-          <Label htmlFor="booking-date">Date</Label>
+          <Label htmlFor="booking-date">{t("booking.date")}</Label>
           <Input
             id="booking-date"
             type="date"
@@ -310,7 +348,7 @@ export function BookingForm({
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="booking-duration">{hourly ? "Time spent" : "Duration"}</Label>
+          <Label htmlFor="booking-duration">{hourly ? t("booking.timeSpent") : t("booking.duration")}</Label>
           <select
             id="booking-duration"
             value={duration}
@@ -330,47 +368,102 @@ export function BookingForm({
       {day && (
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-3">
-            <Label>Start time</Label>
+            <Label>{t("booking.startTime")}</Label>
             <label className="flex items-center gap-2 text-xs text-muted-foreground">
               <Switch checked={showAllTimes} onCheckedChange={setShowAllTimes} />
-              Show all times
+              {t("booking.showAll")}
             </label>
           </div>
 
           {!isWorkingDay && (
             <p className="text-xs text-amber-600 dark:text-amber-400">
-              {format(day, "EEEE")} is not one of your working days.
+              {t("booking.notWorkingDay", { day: fmt(day, "EEEE") })}
             </p>
           )}
 
           {busy === null && !hourly ? (
             <p className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Checking availability…
+              {t("booking.checking")}
             </p>
           ) : times.length === 0 ? (
             <p className="rounded-lg bg-muted/50 px-3 py-4 text-center text-sm text-muted-foreground">
-              No free {duration}-minute slot
-              {showAllTimes ? " on this day." : " within your working hours. Try “Show all times”."}
+              {showAllTimes ? t("booking.noSlotAll", { duration }) : t("booking.noSlot", { duration })}
             </p>
           ) : (
             <div className="grid max-h-56 grid-cols-4 gap-1.5 overflow-y-auto pr-1 sm:grid-cols-6">
-              {times.map((t) => (
+              {times.map((slot) => (
                 <button
-                  key={t}
+                  key={slot}
                   type="button"
-                  onClick={() => setStartTime(t)}
+                  onClick={() => setStartTime(slot)}
                   className={cn(
                     "rounded-md border px-2 py-1.5 text-sm tabular-nums transition-colors",
-                    selected === t
+                    selected === slot
                       ? "border-primary bg-primary text-primary-foreground"
                       : "border-input bg-background hover:bg-muted",
                   )}
                 >
-                  {t}
+                  {slot}
                 </button>
               ))}
             </div>
+          )}
+        </div>
+      )}
+
+      {/* Repeat (new bookings only) */}
+      {!reschedule && (
+        <div className="space-y-2">
+          <Label>{t("booking.repeat")}</Label>
+          <div className="flex flex-wrap items-center gap-2">
+            {[
+              { weeks: 0, label: t("booking.repeatNone") },
+              { weeks: 1, label: t("booking.repeatWeekly") },
+              { weeks: 2, label: t("booking.repeatBiweekly") },
+            ].map((o) => (
+              <button
+                key={o.weeks}
+                type="button"
+                onClick={() => setRepeatWeeks(o.weeks)}
+                className={cn(
+                  "rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors",
+                  repeatWeeks === o.weeks
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-input bg-background hover:bg-muted",
+                )}
+              >
+                {o.label}
+              </button>
+            ))}
+            {repeatWeeks > 0 && (
+              <label className="flex items-center gap-2 text-sm">
+                <Input
+                  type="number"
+                  min={2}
+                  max={MAX_OCCURRENCES}
+                  value={repeatCount}
+                  onChange={(e) => setRepeatCount(Math.max(2, Math.min(MAX_OCCURRENCES, Number(e.target.value) || 2)))}
+                  className="h-8 w-20"
+                  aria-label={t("booking.sessionCount")}
+                />
+                {t("booking.sessions")}
+              </label>
+            )}
+          </div>
+
+          {repeating && currentPreview && (
+            <ul className="max-h-40 overflow-y-auto rounded-lg border text-sm">
+              {currentPreview.map((o) => (
+                <li
+                  key={o.start}
+                  className={cn("flex justify-between gap-3 px-3 py-1.5", o.conflict && "text-muted-foreground line-through")}
+                >
+                  <span>{fmt(o.start, "EEE d MMM yyyy, HH:mm")}</span>
+                  {o.conflict && <span className="no-underline text-xs text-destructive">{t("booking.takenBy", { name: o.conflict })}</span>}
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       )}
@@ -379,18 +472,24 @@ export function BookingForm({
       <div className="flex items-center justify-between gap-3 border-t pt-4">
         <p className="text-sm text-muted-foreground">
           {start && end
-            ? `${format(start, "EEE d MMM")} · ${format(start, "HH:mm")}–${format(end, "HH:mm")}${
-                hourlyPrice !== null ? ` · ${hourlyPrice.toFixed(2)} ${availability.currency}` : ""
+            ? `${fmt(start, "EEE d MMM")} · ${fmt(start, "HH:mm")}–${fmt(end, "HH:mm")}${
+                hourlyPrice !== null ? ` · ${money(hourlyPrice)}` : ""
               }`
-            : "Select a start time"}
+            : t("booking.selectTime")}
         </p>
         <div className="flex gap-2">
           <Button type="button" variant="outline" onClick={onCancel}>
-            {reschedule ? "Back" : "Cancel"}
+            {reschedule ? t("common.back") : t("common.cancel")}
           </Button>
-          <Button onClick={handleSubmit} disabled={isPending || !start}>
+          <Button onClick={handleSubmit} disabled={isPending || !start || (repeating && !!currentPreview && freeCount === 0)}>
             {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {reschedule ? "Move session" : "Book"}
+            {reschedule
+              ? t("booking.move")
+              : repeating
+              ? currentPreview
+                ? tp(freeCount, "booking.bookN")
+                : t("booking.previewDates")
+              : t("booking.book")}
           </Button>
         </div>
       </div>
@@ -408,11 +507,12 @@ export function BookAppointmentButton({
   availability: Availability;
 }) {
   const [open, setOpen] = useState(false);
+  const { t } = useI18n();
   return (
     <>
       <Button onClick={() => setOpen(true)}>
         <CalendarPlus className="mr-2 h-4 w-4" />
-        Book appointment
+        {t("calendar.book")}
       </Button>
       <BookingDialog
         patients={patients}

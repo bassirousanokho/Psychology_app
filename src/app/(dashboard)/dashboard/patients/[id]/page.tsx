@@ -1,7 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { differenceInYears, format } from "date-fns";
+import { differenceInYears } from "date-fns";
 import { AlertTriangle, ArrowLeft, Cake, CalendarDays, Mail, MapPin, Phone, UserRound } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import prisma from "@/lib/prisma";
@@ -14,11 +14,13 @@ import { audit } from "@/lib/tenant";
 import { formatPhone } from "@/lib/phone";
 import { psychotherapyRate } from "@/lib/rates";
 import { cancellationStats } from "@/lib/cancellations";
-import { isHourly, SESSION_TYPE_LABELS } from "@/lib/session-types";
+import { isHourly } from "@/lib/session-types";
+import { makeI18n, toLang } from "@/i18n/core";
+import { formatMoney, localeOf } from "@/lib/format";
 import { RateCard } from "@/components/patients/rate-card";
 import { PatientMessages } from "@/components/patients/patient-messages";
+import { StatementCard } from "@/components/patients/statement-card";
 import { decrypt } from "@/lib/crypto";
-import { GENDER_LABELS } from "@/lib/schemas";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -60,13 +62,16 @@ export default async function PatientProfilePage({ params }: PageProps) {
         orderBy: { createdAt: "desc" },
       },
       portalUser: { select: { id: true } },
-      workspace: { select: { currency: true, cancellationAlertThreshold: true } },
+      workspace: { select: { currency: true, cancellationAlertThreshold: true, language: true, region: true } },
     },
   });
 
   if (!patient) notFound();
 
   const currency = patient.workspace.currency;
+  const lang = toLang(patient.workspace.language);
+  const { t, fmt } = makeI18n(lang);
+  const money = (n: number) => formatMoney(n, currency, localeOf(lang, patient.workspace.region));
   const currentRate = Number(await psychotherapyRate(patient.id, new Date()));
   const cancellations = cancellationStats(patient.appointments);
   const threshold = patient.workspace.cancellationAlertThreshold;
@@ -94,7 +99,7 @@ export default async function PatientProfilePage({ params }: PageProps) {
 
   return (
     <>
-      <Header title="Patient Profile" />
+      <Header title={t("nav.patientProfile")} />
 
       <main className="flex-1 p-6">
         <div className="mx-auto max-w-4xl space-y-6">
@@ -107,21 +112,20 @@ export default async function PatientProfilePage({ params }: PageProps) {
             render={<Link href="/dashboard/patients" />}
           >
             <ArrowLeft className="mr-1.5 h-4 w-4" />
-            Back to patients
+            {t("profile.back")}
           </Button>
 
           {patient.deletedAt && (
             <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-5 py-3 text-sm dark:border-amber-900 dark:bg-amber-950/30">
               <p className="text-amber-900 dark:text-amber-200">
-                This patient was deleted on {format(patient.deletedAt, "d MMMM yyyy")}. Their
-                history is kept read-only.
+                {t("profile.deletedBanner", { date: fmt(patient.deletedAt, "d MMMM yyyy") })}
               </p>
               <Button
                 variant="outline"
                 size="sm"
                 render={<Link href="/dashboard/patients?view=deleted" />}
               >
-                Recently deleted
+                {t("deleted.title")}
               </Button>
             </div>
           )}
@@ -155,7 +159,7 @@ export default async function PatientProfilePage({ params }: PageProps) {
               {patient.dateOfBirth && (
                 <span className="flex items-center gap-1.5">
                   <Cake className="h-3.5 w-3.5" />
-                  {format(patient.dateOfBirth, "d MMMM yyyy")} ({differenceInYears(new Date(), patient.dateOfBirth)} y/o)
+                  {fmt(patient.dateOfBirth, "d MMMM yyyy")} ({t("common.yearsOld", { years: differenceInYears(new Date(), patient.dateOfBirth) })})
                 </span>
               )}
               {patient.address && (
@@ -168,20 +172,20 @@ export default async function PatientProfilePage({ params }: PageProps) {
                 <span className="flex items-center gap-1.5">
                   <UserRound className="h-3.5 w-3.5" />
                   {[
-                    patient.gender && GENDER_LABELS[patient.gender as keyof typeof GENDER_LABELS],
+                    patient.gender && t(`gender.${patient.gender as "FEMALE" | "MALE" | "OTHER"}`),
                     patient.pronouns,
                   ].filter(Boolean).join(" · ")}
                 </span>
               )}
               <span className="flex items-center gap-1.5">
                 <CalendarDays className="h-3.5 w-3.5" />
-                Patient since {format(patient.createdAt, "MMMM yyyy")}
+                {t("profile.since", { date: fmt(patient.createdAt, "MMMM yyyy") })}
               </span>
             </div>
             {patient.backgroundNotes && (
               <div className="mt-4 rounded-lg bg-muted/40 p-4">
                 <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                  Background notes
+                  {t("profile.background")}
                 </p>
                 <p className="whitespace-pre-wrap text-sm leading-relaxed">
                   {patient.backgroundNotes}
@@ -194,12 +198,18 @@ export default async function PatientProfilePage({ params }: PageProps) {
           {(patient.emergencyContactName || patient.emergencyContactPhone || patient.doctorName || patient.doctorPhone) && (
             <div className="grid gap-4 sm:grid-cols-2">
               <ContactCard
-                title="Emergency contact"
+                title={t("profile.emergency")}
+                notProvided={t("common.notProvided")}
                 name={patient.emergencyContactName}
                 detail={patient.emergencyContactRelation}
                 phone={patient.emergencyContactPhone}
               />
-              <ContactCard title="Family doctor" name={patient.doctorName} phone={patient.doctorPhone} />
+              <ContactCard
+                title={t("profile.doctor")}
+                notProvided={t("common.notProvided")}
+                name={patient.doctorName}
+                phone={patient.doctorPhone}
+              />
             </div>
           )}
 
@@ -210,9 +220,9 @@ export default async function PatientProfilePage({ params }: PageProps) {
             patientEmail={patient.email}
             disabledReason={
               patient.deletedAt
-                ? "This patient was deleted."
+                ? t("messages.deletedReason")
                 : !patient.email
-                ? "Add an email address to write to this patient."
+                ? t("messages.noEmailReason")
                 : null
             }
             messages={patient.messages.map((m) => ({
@@ -245,28 +255,32 @@ export default async function PatientProfilePage({ params }: PageProps) {
           {/* Cancellations */}
           <div className={`rounded-xl border bg-card ${cancellationAlert ? "border-amber-300 dark:border-amber-800" : ""}`}>
             <div className="flex flex-wrap items-center justify-between gap-2 border-b px-5 py-3">
-              <h2 className="font-semibold">Cancellations</h2>
+              <h2 className="font-semibold">{t("profile.cancellations")}</h2>
               {cancellationAlert && (
                 <span className="flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-400">
                   <AlertTriangle className="h-3.5 w-3.5" />
-                  {cancellations.last30Days} in the last 30 days (alert from {threshold})
+                  {t("profile.cancellationAlert", { count: cancellations.last30Days, threshold })}
                 </span>
               )}
             </div>
             <div className="grid grid-cols-2 gap-4 px-5 py-4 sm:grid-cols-4">
-              <Stat label="Last 30 days" value={cancellations.last30Days} />
-              <Stat label="This month" value={cancellations.thisMonth} />
-              <Stat label="Last 12 months" value={cancellations.last12Months} hint={`${cancellations.withFee12Months} with fee`} />
-              <Stat label="No-shows (12 months)" value={cancellations.noShows12Months} />
+              <Stat label={t("profile.stat.30days")} value={cancellations.last30Days} />
+              <Stat label={t("profile.stat.month")} value={cancellations.thisMonth} />
+              <Stat
+                label={t("profile.stat.12months")}
+                value={cancellations.last12Months}
+                hint={t("profile.stat.withFee", { count: cancellations.withFee12Months })}
+              />
+              <Stat label={t("profile.stat.noShows")} value={cancellations.noShows12Months} />
             </div>
             {cancellations.byMonth.length > 0 && (
               <div className="border-t px-5 py-3">
-                <p className="mb-2 text-xs font-medium text-muted-foreground">By month</p>
+                <p className="mb-2 text-xs font-medium text-muted-foreground">{t("profile.byMonth")}</p>
                 <div className="flex flex-wrap gap-2">
                   {cancellations.byMonth.map((m) => (
                     <span key={m.month} className="rounded-md bg-muted px-2 py-1 text-xs tabular-nums">
-                      {format(new Date(`${m.month}-01T00:00:00`), "MMM yyyy")}: {m.cancellations} cancelled
-                      {m.noShows > 0 && `, ${m.noShows} no-show`}
+                      {t("profile.monthLine", { month: fmt(`${m.month}-01T00:00:00`, "MMM yyyy"), count: m.cancellations })}
+                      {m.noShows > 0 && t("profile.monthNoShow", { count: m.noShows })}
                     </span>
                   ))}
                 </div>
@@ -274,10 +288,13 @@ export default async function PatientProfilePage({ params }: PageProps) {
             )}
           </div>
 
+          {/* Statement of payments for insurance */}
+          <StatementCard patientId={patient.id} patientHasEmail={!!patient.email} />
+
           {/* Documents */}
           <div className="rounded-xl border bg-card">
             <div className="flex items-center justify-between border-b px-5 py-3">
-              <h2 className="font-semibold">Documents</h2>
+              <h2 className="font-semibold">{t("profile.documents")}</h2>
               {!patient.deletedAt && <DocumentUploader patientId={patient.id} />}
             </div>
             <DocumentList key={docs.map((d) => d.id).join()} documents={docs} />
@@ -286,35 +303,35 @@ export default async function PatientProfilePage({ params }: PageProps) {
           {/* Appointment history */}
           <div className="rounded-xl border bg-card">
             <div className="border-b px-5 py-3">
-              <h2 className="font-semibold">Session history</h2>
+              <h2 className="font-semibold">{t("profile.history")}</h2>
             </div>
             {patient.appointments.length === 0 ? (
-              <p className="px-5 py-4 text-sm text-muted-foreground">No sessions yet.</p>
+              <p className="px-5 py-4 text-sm text-muted-foreground">{t("profile.noSessions")}</p>
             ) : (
               <ul className="divide-y">
                 {patient.appointments.map((appt) => (
                   <li key={appt.id} className="flex items-center gap-4 px-5 py-3">
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium">
-                        {format(appt.startTime, "EEEE d MMMM yyyy")}
+                        {fmt(appt.startTime, "EEEE d MMMM yyyy")}
                         {isHourly(appt.type) && (
                           <span className="ml-2 text-xs font-normal text-muted-foreground">
-                            {SESSION_TYPE_LABELS[appt.type]}
+                            {t(`type.${appt.type}`)}
                           </span>
                         )}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {format(appt.startTime, "HH:mm")} –{" "}
-                        {format(appt.endTime, "HH:mm")} ·{" "}
-                        {Number(appt.tariffAmount).toFixed(2)} {currency}
+                        {fmt(appt.startTime, "HH:mm")} –{" "}
+                        {fmt(appt.endTime, "HH:mm")} ·{" "}
+                        {money(Number(appt.tariffAmount))}
                         {appt.status === "CANCELLED" &&
                           (appt.cancellationFee
-                            ? ` · cancellation fee ${Number(appt.cancellationFee).toFixed(2)} ${currency}`
-                            : " · cancelled without fee")}
+                            ? ` · ${t("profile.feeCharged", { amount: money(Number(appt.cancellationFee)) })}`
+                            : ` · ${t("profile.noFee")}`)}
                       </p>
                     </div>
                     <Badge variant={STATUS_VARIANTS[appt.status]}>
-                      {appt.status.charAt(0) + appt.status.slice(1).toLowerCase().replace("_", "-")}
+                      {t(`status.${appt.status}`)}
                     </Badge>
                     <Button
                       variant="ghost"
@@ -322,7 +339,7 @@ export default async function PatientProfilePage({ params }: PageProps) {
                       className="h-8 text-xs"
                       render={<Link href={`/dashboard/appointments/${appt.id}`} />}
                     >
-                      {appt.noteCompletedAt ? "View notes" : "Write notes"}
+                      {appt.noteCompletedAt ? t("profile.viewNotes") : t("profile.writeNotes")}
                     </Button>
                   </li>
                 ))}
@@ -338,11 +355,13 @@ export default async function PatientProfilePage({ params }: PageProps) {
 
 function ContactCard({
   title,
+  notProvided,
   name,
   detail,
   phone,
 }: {
   title: string;
+  notProvided: string;
   name: string | null;
   detail?: string | null;
   phone: string | null;
@@ -366,7 +385,7 @@ function ContactCard({
           )}
         </>
       ) : (
-        <p className="text-sm text-muted-foreground">Not provided</p>
+        <p className="text-sm text-muted-foreground">{notProvided}</p>
       )}
     </div>
   );

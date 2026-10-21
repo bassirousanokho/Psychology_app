@@ -1,6 +1,7 @@
-import { format } from "date-fns";
+
 import { Download, FileText, Image as ImageIcon } from "lucide-react";
 import { requirePatientAuth } from "@/lib/patient-auth";
+import { portalI18n } from "@/i18n/server";
 import prisma from "@/lib/prisma";
 import { Button } from "@/components/ui/button";
 
@@ -17,6 +18,7 @@ function humanSize(bytes: number): string {
 
 export default async function PortalDocumentsPage() {
   const session = await requirePatientAuth();
+  const { t, fmt } = portalI18n(session.workspace);
 
   const rows = await prisma.document.findMany({
     where: {
@@ -33,16 +35,16 @@ export default async function PortalDocumentsPage() {
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-4">
       <div>
-        <h1 className="text-2xl font-bold">Documents</h1>
+        <h1 className="text-2xl font-bold">{t("portal.documents")}</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
-          Files shared with you by your practitioner.
+          {t("portal.documentsHint")}
         </p>
       </div>
 
       <div className="rounded-xl border bg-card">
         {documents.length === 0 ? (
           <p className="px-5 py-6 text-sm text-muted-foreground">
-            No documents have been shared with you yet.
+            {t("portal.noDocuments")}
           </p>
         ) : (
           <ul className="divide-y">
@@ -52,7 +54,7 @@ export default async function PortalDocumentsPage() {
                 <div className="flex-1 min-w-0">
                   <p className="truncate text-sm font-medium">{doc.name}</p>
                   <p className="text-xs text-muted-foreground">
-                    {humanSize(doc.fileSize)} · {format(doc.createdAt, "d MMM yyyy")}
+                    {humanSize(doc.fileSize)} · {fmt(doc.createdAt, "d MMM yyyy")}
                   </p>
                 </div>
                 <Button
@@ -62,7 +64,7 @@ export default async function PortalDocumentsPage() {
                   render={<a href={doc.url} target="_blank" rel="noopener noreferrer" download />}
                 >
                   <Download className="mr-1.5 h-3.5 w-3.5" />
-                  Download
+                  {t("portal.download")}
                 </Button>
               </li>
             ))}

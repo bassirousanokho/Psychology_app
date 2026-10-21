@@ -7,9 +7,12 @@ import { toast } from "sonner";
 import { AlertTriangle, Archive, BellRing, Loader2 } from "lucide-react";
 import { markRateChangeNotified } from "@/app/(dashboard)/dashboard/rates/actions";
 import { Button } from "@/components/ui/button";
+import { useI18n } from "@/i18n/client";
+import { formatMoney } from "@/lib/format";
 
 export type RemindersData = {
   currency: string;
+  locale: string;
   retentionYears: number;
   cancellationThreshold: number;
   rateChanges: {
@@ -29,6 +32,7 @@ export function Reminders({ data }: { data: RemindersData }) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const today = format(new Date(), "yyyy-MM-dd");
+  const { t, fmt, tError } = useI18n();
 
   const total =
     data.rateChanges.length +
@@ -42,8 +46,8 @@ export function Reminders({ data }: { data: RemindersData }) {
     startTransition(async () => {
       const result = await markRateChangeNotified(id);
       setBusyId(null);
-      if (result.success) toast.success("Marked as informed");
-      else toast.error(result.error);
+      if (result.success) toast.success(t("reminders.markedInformed"));
+      else toast.error(tError(result.error));
     });
   }
 
@@ -51,13 +55,13 @@ export function Reminders({ data }: { data: RemindersData }) {
     <div className="rounded-xl border bg-card">
       <div className="flex items-center gap-2 border-b px-5 py-3">
         <BellRing className="h-4 w-4 text-amber-500" />
-        <h3 className="font-semibold">Reminders</h3>
-        <span className="ml-auto text-xs text-muted-foreground">{total} to review</span>
+        <h3 className="font-semibold">{t("reminders.title")}</h3>
+        <span className="ml-auto text-xs text-muted-foreground">{t("reminders.toReview", { count: total })}</span>
       </div>
 
       <div className="divide-y">
         {data.rateChanges.length > 0 && (
-          <Section title="Rate changes to announce">
+          <Section title={t("reminders.rates")}>
             {data.rateChanges.map((c) => {
               const late = c.effectiveFrom <= today;
               return (
@@ -66,10 +70,10 @@ export function Reminders({ data }: { data: RemindersData }) {
                     {c.patientName}
                   </Link>
                   <span className="tabular-nums text-muted-foreground">
-                    {c.previousAmount.toFixed(2)} → {c.amount.toFixed(2)} {data.currency}
+                    {formatMoney(c.previousAmount, data.currency, data.locale)} → {formatMoney(c.amount, data.currency, data.locale)}
                   </span>
                   <span className={late ? "text-xs font-medium text-destructive" : "text-xs text-muted-foreground"}>
-                    {late ? "since" : "from"} {format(new Date(c.effectiveFrom), "d MMM yyyy")}
+                    {t(late ? "reminders.since" : "reminders.from", { date: fmt(`${c.effectiveFrom}T12:00:00`, "d MMM yyyy") })}
                   </span>
                   <Button
                     size="sm"
@@ -79,7 +83,7 @@ export function Reminders({ data }: { data: RemindersData }) {
                     onClick={() => markNotified(c.id)}
                   >
                     {busyId === c.id && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-                    Mark informed
+                    {t("reminders.markInformed")}
                   </Button>
                 </li>
               );
@@ -88,28 +92,28 @@ export function Reminders({ data }: { data: RemindersData }) {
         )}
 
         {data.cancellationAlerts.length > 0 && (
-          <Section title={`Frequent cancellations (${data.cancellationThreshold}+ in 30 days)`}>
+          <Section title={t("reminders.cancellations", { threshold: data.cancellationThreshold })}>
             {data.cancellationAlerts.map((a) => (
               <li key={a.patientId} className="flex items-center gap-3 py-2 text-sm">
                 <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-500" />
                 <Link href={`/dashboard/patients/${a.patientId}`} className="flex-1 truncate font-medium hover:underline">
                   {a.patientName}
                 </Link>
-                <span className="text-xs text-muted-foreground">{a.count} cancellations</span>
+                <span className="text-xs text-muted-foreground">{t("reminders.cancellationCount", { count: a.count })}</span>
               </li>
             ))}
           </Section>
         )}
 
         {data.inactivePatients.length > 0 && (
-          <Section title={`No session for ${data.retentionYears}+ years: consider deleting`}>
+          <Section title={t("reminders.inactive", { years: data.retentionYears })}>
             {data.inactivePatients.map((p) => (
               <li key={p.patientId} className="flex items-center gap-3 py-2 text-sm">
                 <Link href={`/dashboard/patients/${p.patientId}`} className="flex-1 truncate font-medium hover:underline">
                   {p.patientName}
                 </Link>
                 <span className="text-xs text-muted-foreground">
-                  last activity {format(new Date(p.lastActivity), "MMM yyyy")}
+                  {t("reminders.lastActivity", { date: fmt(p.lastActivity, "MMM yyyy") })}
                 </span>
               </li>
             ))}
@@ -117,19 +121,19 @@ export function Reminders({ data }: { data: RemindersData }) {
         )}
 
         {data.deletedPatients.length > 0 && (
-          <Section title={`In Recently deleted for ${data.retentionYears}+ years: delete permanently`}>
+          <Section title={t("reminders.deleted", { years: data.retentionYears })}>
             {data.deletedPatients.map((p) => (
               <li key={p.patientId} className="flex items-center gap-3 py-2 text-sm">
                 <Archive className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                 <span className="flex-1 truncate font-medium">{p.patientName}</span>
                 <span className="text-xs text-muted-foreground">
-                  deleted {format(new Date(p.deletedAt), "MMM yyyy")}
+                  {t("reminders.deletedOn", { date: fmt(p.deletedAt, "MMM yyyy") })}
                 </span>
               </li>
             ))}
             <li className="pt-1">
               <Link href="/dashboard/patients?view=deleted" className="text-xs underline underline-offset-2">
-                Open Recently deleted
+                {t("reminders.openDeleted")}
               </Link>
             </li>
           </Section>

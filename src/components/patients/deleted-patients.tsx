@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { format } from "date-fns";
 import { toast } from "sonner";
 import { Loader2, RotateCcw, Trash2 } from "lucide-react";
 import { purgePatient, restorePatient } from "@/app/(dashboard)/dashboard/patients/actions";
 import { Button } from "@/components/ui/button";
+import { useI18n } from "@/i18n/client";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,6 +29,7 @@ export function DeletedPatients({ patients }: { patients: DeletedPatient[] }) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [purgeTarget, setPurgeTarget] = useState<DeletedPatient | null>(null);
   const [, startTransition] = useTransition();
+  const { t, tp, tError, fmt } = useI18n();
 
   function run(id: string, action: () => Promise<{ success: boolean; error?: string }>, ok: string) {
     setBusyId(id);
@@ -36,14 +37,14 @@ export function DeletedPatients({ patients }: { patients: DeletedPatient[] }) {
       const result = await action();
       setBusyId(null);
       if (result.success) toast.success(ok);
-      else toast.error(result.error ?? "Something went wrong");
+      else toast.error(tError(result.error));
     });
   }
 
   if (patients.length === 0) {
     return (
       <div className="rounded-lg border bg-card px-5 py-10 text-center text-sm text-muted-foreground">
-        No recently deleted patients.
+        {t("deleted.empty")}
       </div>
     );
   }
@@ -58,34 +59,33 @@ export function DeletedPatients({ patients }: { patients: DeletedPatient[] }) {
                 {p.lastName}, {p.firstName}
               </p>
               <p className="text-xs text-muted-foreground">
-                Deleted {format(new Date(p.deletedAt), "d MMM yyyy 'at' HH:mm")}
-                {p.invoiceCount > 0 &&
-                  ` · ${p.invoiceCount} invoice${p.invoiceCount !== 1 ? "s" : ""} kept`}
+                {t("deleted.on", { date: fmt(p.deletedAt, "d MMM yyyy, HH:mm") })}
+                {p.invoiceCount > 0 && ` · ${tp(p.invoiceCount, "deleted.invoicesKept")}`}
               </p>
             </div>
             <Button
               variant="outline"
               size="sm"
               disabled={busyId === p.id}
-              onClick={() => run(p.id, () => restorePatient(p.id), "Patient restored")}
+              onClick={() => run(p.id, () => restorePatient(p.id), t("deleted.restored"))}
             >
               {busyId === p.id ? (
                 <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
               ) : (
                 <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
               )}
-              Restore
+              {t("deleted.restore")}
             </Button>
             <Button
               variant="ghost"
               size="sm"
               className="text-destructive hover:text-destructive"
               disabled={busyId === p.id || p.invoiceCount > 0}
-              title={p.invoiceCount > 0 ? "Invoices must be kept for 10 years" : undefined}
+              title={p.invoiceCount > 0 ? t("deleted.purgeBlocked") : undefined}
               onClick={() => setPurgeTarget(p)}
             >
               <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-              Delete permanently
+              {t("deleted.purge")}
             </Button>
           </li>
         ))}
@@ -94,26 +94,22 @@ export function DeletedPatients({ patients }: { patients: DeletedPatient[] }) {
       <AlertDialog open={!!purgeTarget} onOpenChange={(o) => !o && setPurgeTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete permanently?</AlertDialogTitle>
+            <AlertDialogTitle>{t("deleted.purgeTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              <strong>
-                {purgeTarget?.firstName} {purgeTarget?.lastName}
-              </strong>
-              , their sessions, session notes and documents will be erased for good. This cannot be
-              undone.
+              {t("deleted.purgeBody", { name: `${purgeTarget?.firstName ?? ""} ${purgeTarget?.lastName ?? ""}` })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => {
                 const target = purgeTarget!;
                 setPurgeTarget(null);
-                run(target.id, () => purgePatient(target.id), "Patient permanently deleted");
+                run(target.id, () => purgePatient(target.id), t("deleted.purged"));
               }}
             >
-              Delete permanently
+              {t("deleted.purge")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

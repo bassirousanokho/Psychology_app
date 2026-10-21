@@ -1,5 +1,6 @@
 // Shared by server and client code.
 import { regionConfig, type LegalField } from "@/lib/regions";
+import type { MessageKey } from "@/i18n/messages";
 
 type LegalDetails = { region?: string | null; address?: string | null; vatMention?: string | null } & Partial<
   Record<LegalField, string | null>
@@ -7,15 +8,16 @@ type LegalDetails = { region?: string | null; address?: string | null; vatMentio
 
 const filled = (v: string | null | undefined) => !!v && v.trim() !== "";
 
-/** Details the practice's invoices must show (per region); listed until filled in. */
-export function missingLegalDetails(d: LegalDetails): string[] {
+/** Details the practice's invoices must show (per region), as message keys; listed until filled in. */
+export function missingLegalDetails(d: LegalDetails): MessageKey[] {
   const cfg = regionConfig(d.region);
-  const missing: string[] = [];
-  if (!filled(d.address)) missing.push("Professional address");
-  for (const f of cfg.legalFields) if (f.required && !filled(d[f.key])) missing.push(f.label);
+  const missing: MessageKey[] = [];
+  if (!filled(d.address)) missing.push("legal.address");
+  if (cfg.legalFields.some((f) => f.key === "permitNumber") && !filled(d.permitNumber)) missing.push("legal.permit");
+  if (cfg.legalFields.some((f) => f.key === "siret") && !filled(d.siret)) missing.push("legal.siret");
   // France: one of ADELI / RPPS is required
-  if (d.region === "FR" && !filled(d.adeli) && !filled(d.rpps)) missing.push("ADELI or RPPS number");
-  if (!filled(d.vatMention)) missing.push("Tax mention");
+  if (d.region === "FR" && !filled(d.adeli) && !filled(d.rpps)) missing.push("legal.adeliRpps");
+  if (!filled(d.vatMention)) missing.push("legal.taxMention");
   return missing;
 }
 
@@ -24,3 +26,4 @@ export function formatLegalValue(key: LegalField, value: string): string {
   if (key === "siret") return value.replace(/^(\d{3})(\d{3})(\d{3})(\d{5})$/, "$1 $2 $3 $4");
   return value;
 }
+

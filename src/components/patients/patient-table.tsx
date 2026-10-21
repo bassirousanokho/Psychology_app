@@ -14,6 +14,7 @@ import { ArrowDown, ArrowUp, ArrowUpDown, Search } from "lucide-react";
 import type { PatientRow } from "./types";
 import { patientColumns } from "./patient-columns";
 import { phoneSearchDigits } from "@/lib/phone";
+import { useI18n } from "@/i18n/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -51,6 +52,7 @@ const patientSearch: FilterFn<PatientRow> = (row, _columnId, query: string) => {
 export function PatientTable({ patients, initialQuery = "", defaultTariffLabel, region }: PatientTableProps) {
   const [sorting, setSorting] = useState<SortingState>([{ id: "name", desc: false }]);
   const [globalFilter, setGlobalFilter] = useState(initialQuery);
+  const { t, tp } = useI18n();
 
   const table = useReactTable({
     data: patients,
@@ -72,7 +74,7 @@ export function PatientTable({ patients, initialQuery = "", defaultTariffLabel, 
       <div className="relative max-w-xs">
         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Search patients…"
+          placeholder={t("patients.search")}
           value={globalFilter}
           onChange={(e) => setGlobalFilter(e.target.value)}
           className="pl-8"
@@ -125,7 +127,7 @@ export function PatientTable({ patients, initialQuery = "", defaultTariffLabel, 
             ) : (
               <TableRow>
                 <TableCell colSpan={patientColumns.length} className="h-32 text-center text-muted-foreground">
-                  {globalFilter ? "No patients match your search." : "No patients yet. Add your first one!"}
+                  {globalFilter ? t("patients.noMatch") : t("patients.empty")}
                 </TableCell>
               </TableRow>
             )}
@@ -134,8 +136,7 @@ export function PatientTable({ patients, initialQuery = "", defaultTariffLabel, 
       </div>
 
       <p className="text-xs text-muted-foreground">
-        {table.getFilteredRowModel().rows.length} patient
-        {table.getFilteredRowModel().rows.length !== 1 ? "s" : ""}
+        {tp(table.getFilteredRowModel().rows.length, "patients.footer")}
       </p>
     </div>
   );

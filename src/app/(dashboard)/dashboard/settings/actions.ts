@@ -9,7 +9,12 @@ import { REGIONS, regionConfig } from "@/lib/regions";
 
 // The practice psychotherapy rate is changed through changePracticeRate (rates/actions.ts)
 const settingsSchema = z.object({
+  name: z.string().trim().min(1, "Practice name is required").max(120),
   region: z.enum(REGIONS),
+  language: z.enum(["fr", "en"]),
+  sessionRemindersEnabled: z.boolean(),
+  gstRate: z.coerce.number().min(0).max(100),
+  qstRate: z.coerce.number().min(0).max(100),
   hourlyRateAdmin: z.coerce.number().min(0, "Must be 0 or greater"),
   hourlyRateWriting: z.coerce.number().min(0, "Must be 0 or greater"),
   cancellationNoticeHours: z.coerce.number().int().min(0).max(720, "At most 30 days"),
@@ -51,9 +56,13 @@ export async function updateSettings(data: SettingsFormData) {
     if (!current.paymentTerms || current.paymentTerms === from.paymentTerms) extra.paymentTerms = to.paymentTerms;
   }
 
+  // Québec: the rate applied to new sessions is GST + QST (shown as two lines on invoices)
+  const taxRate =
+    parsed.data.region === "CA-QC" ? parsed.data.gstRate + parsed.data.qstRate : parsed.data.taxRate;
+
   await prisma.workspace.update({
     where: { id: userId },
-    data: { ...parsed.data, ...extra },
+    data: { ...parsed.data, taxRate, ...extra },
   });
 
   revalidatePath("/dashboard", "layout");

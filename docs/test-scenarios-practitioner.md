@@ -858,6 +858,35 @@ Recette now runs at **https://psy-app-804784013458.northamerica-northeast1.run.a
 - [ ] Charts: income by month (invoiced vs collected), sessions by month (completed / cancelled / no-show), new patients, sessions by weekday.
 - [ ] Unpaid invoices by days late, and top 5 patients by income.
 
+## 18. Inbox (2026-10-25)
+
+### 18.1 Writing to a patient
+- [ ] Sidebar → **Messagerie** (badge = unread patient messages + new activity). « Écrire à un patient… » opens a conversation.
+- [ ] Patient profile → Messages card shows the last messages and how the patient reads them (portal / private link / can't yet). « Écrire » opens the conversation.
+- [ ] Send a text message, then one with a PDF and an image attached: they appear in the thread and in the patient's documents (« shared »).
+- [ ] Patient with portal account: the email notice (once Resend is set up) contains no content, only a link to the portal.
+- [ ] Patient without portal but with date of birth: the notice links to a private link. Without an email provider, the link is copied for you.
+- [ ] Patient without date of birth nor portal: warning « can't read messages yet ».
+- [ ] Two messages within an hour while the first is unread: only one notice email.
+- [ ] Patient in Recently deleted: the composer is disabled.
+
+### 18.2 Private link (patient without account)
+- [ ] Open the link: asks for the 3 first letters of the last name + date of birth. Accents and capitals don't matter (« CÔT » = « cot »).
+- [ ] Wrong details: error; after 5 wrong tries, locked for 30 minutes.
+- [ ] Right details: the conversation opens, with the emergency banner (911 / 988). Reply with text and a file.
+- [ ] After 30 minutes (or in another browser) the check is asked again.
+- [ ] Conversation → reset link (↺): the old link shows « not found ».
+
+### 18.3 Portal
+- [ ] Portal → Messages (badge when unread), on desktop and phone (new top menu on phones).
+- [ ] Patient writes first (allowed by default); turning off « Patients can start a conversation » makes it reply-only.
+- [ ] Your messages show ✓ (sent) then ✓✓ (read) once the patient opens them; same for theirs on your side.
+- [ ] The thread refreshes by itself every ~20 seconds.
+
+### 18.4 Activity
+- [ ] Inbox → Activité lists portal bookings, moves, cancellations (with late fee) and completed forms, each linking to the session or the answers. New items are highlighted once, then marked seen.
+- [ ] Settings → Messagerie → « M'envoyer aussi les événements par courriel » off: no more emails, the activity is still listed.
+
 ---
 
 ## Suspected issues

@@ -28,6 +28,8 @@ const schema = z.object({
   language: z.enum(["fr", "en"]),
   sessionRemindersEnabled: z.boolean(),
   patientSelfServiceEnabled: z.boolean(),
+  patientCanWriteFirst: z.boolean(),
+  practitionerEmailNotices: z.boolean(),
   currency: z.string().min(1),
   workingHoursStart: z.string().regex(/^\d{2}:\d{2}$/),
   workingHoursEnd: z.string().regex(/^\d{2}:\d{2}$/),
@@ -296,6 +298,25 @@ export function SettingsForm({ defaults, practiceRate }: SettingsFormProps) {
           <span>
             {t("settings.selfService")}
             <span className="block text-xs text-muted-foreground">{t("settings.selfServiceHint")}</span>
+          </span>
+        </label>
+      </section>
+
+      {/* Inbox */}
+      <section className="rounded-xl border bg-card p-6 space-y-3">
+        <h2 className="font-semibold text-base">{t("settings.inbox")}</h2>
+        <label className="flex items-start gap-3 text-sm">
+          <input type="checkbox" className="mt-0.5 h-4 w-4" {...register("patientCanWriteFirst")} />
+          <span>
+            {t("settings.writeFirst")}
+            <span className="block text-xs text-muted-foreground">{t("settings.writeFirstHint")}</span>
+          </span>
+        </label>
+        <label className="flex items-start gap-3 text-sm">
+          <input type="checkbox" className="mt-0.5 h-4 w-4" {...register("practitionerEmailNotices")} />
+          <span>
+            {t("settings.emailNotices")}
+            <span className="block text-xs text-muted-foreground">{t("settings.emailNoticesHint")}</span>
           </span>
         </label>
       </section>

@@ -9,8 +9,9 @@ import settings from "./settings";
 import portal from "./portal";
 import invoices from "./invoices";
 import features from "./features";
+import inbox from "./inbox";
 
-const areas = [common, shell, overview, patients, calendar, session, billing, settings, portal, invoices, features] as const;
+const areas = [common, shell, overview, patients, calendar, session, billing, settings, portal, invoices, features, inbox] as const;
 
 type Areas = (typeof areas)[number];
 // Distributes over the areas, so the result is the union of every area's keys

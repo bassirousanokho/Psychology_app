@@ -153,6 +153,13 @@ const EXACT: Record<string, string> = {
   "Please answer every required question": "Merci de répondre à toutes les questions obligatoires",
   "This form is no longer available": "Ce formulaire n'est plus disponible",
   "Type your full name to sign": "Saisissez votre nom complet pour signer",
+  // Inbox
+  "Your practitioner hasn't opened a conversation yet": "Votre psychologue n'a pas encore ouvert de conversation",
+  "This link is no longer valid": "Ce lien n'est plus valide",
+  "Too many attempts: try again in 30 minutes": "Trop de tentatives : réessayez dans 30 minutes",
+  "These details don't match": "Ces informations ne correspondent pas",
+  "Enter your date of birth": "Saisissez votre date de naissance",
+  "Your session has expired: check your details again": "Votre session a expiré : confirmez à nouveau votre identité",
   // Portal
   "This day is not available": "Ce jour n'est pas disponible",
   "This time slot is outside working hours": "Ce créneau est en dehors des heures d'ouverture",
@@ -166,6 +173,7 @@ const PATTERNS: [RegExp, (...m: string[]) => string][] = [
   [/^The slot is now taken by (.+)'s session$/, (name) => `Le créneau est maintenant pris par la séance de ${name}`],
   [/^Choose 2 to (\d+) sessions$/, (n) => `Choisissez entre 2 et ${n} séances`],
   [/^At most (\d+) fields$/, (n) => `${n} champs au maximum`],
+  [/^At most (\d+) files per message$/, (n) => `${n} fichiers au maximum par message`],
   [/^Could not delete (\d+) file\(s\) from storage\. Try again\.$/, (n) => `${n} fichier(s) n'ont pas pu être supprimés. Réessayez.`],
   [/^The email could not be sent: (.+)$/, (err) => `Le courriel n'a pas pu être envoyé : ${err}`],
   [/^(SIRET|ADELI|RPPS|NEQ) must be (\d+) digits$/, (f, n) => `Le ${f} doit comporter ${n} chiffres`],

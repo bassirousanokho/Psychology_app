@@ -13,6 +13,8 @@ const settingsSchema = z.object({
   language: z.enum(["fr", "en"]),
   sessionRemindersEnabled: z.boolean(),
   patientSelfServiceEnabled: z.boolean(),
+  patientCanWriteFirst: z.boolean(),
+  practitionerEmailNotices: z.boolean(),
   gstRate: z.coerce.number().min(0).max(100),
   qstRate: z.coerce.number().min(0).max(100),
   hourlyRateAdmin: z.coerce.number().min(0, "Must be 0 or greater"),

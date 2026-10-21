@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
 import {
   BarChart3,
+  Inbox,
   ClipboardList,
   LayoutDashboard,
   CalendarDays,
@@ -32,11 +33,12 @@ import { useI18n } from "@/i18n/client";
 import type { MessageKey } from "@/i18n/messages";
 import type { LucideIcon } from "lucide-react";
 
-const navItems: { label: MessageKey; href: string; icon: LucideIcon; showBadge?: boolean }[] = [
+const navItems: { label: MessageKey; href: string; icon: LucideIcon; badge?: "notes" | "inbox" }[] = [
   { label: "nav.overview", href: "/dashboard",          icon: LayoutDashboard },
+  { label: "nav.inbox",    href: "/dashboard/inbox",    icon: Inbox, badge: "inbox" },
   { label: "nav.calendar", href: "/dashboard/calendar", icon: CalendarDays },
   { label: "nav.patients", href: "/dashboard/patients", icon: Users },
-  { label: "nav.notes",    href: "/dashboard/notes",    icon: FileText, showBadge: true },
+  { label: "nav.notes",    href: "/dashboard/notes",    icon: FileText, badge: "notes" },
   { label: "nav.forms",    href: "/dashboard/forms",    icon: ClipboardList },
   { label: "nav.billing",  href: "/dashboard/billing",  icon: Receipt },
   { label: "nav.reports",  href: "/dashboard/reports",  icon: BarChart3 },
@@ -45,9 +47,10 @@ const navItems: { label: MessageKey; href: string; icon: LucideIcon; showBadge?:
 interface AppSidebarProps {
   workspaceName: string;
   pendingNotes?: number;
+  unreadInbox?: number;
 }
 
-export function AppSidebar({ workspaceName, pendingNotes = 0 }: AppSidebarProps) {
+export function AppSidebar({ workspaceName, pendingNotes = 0, unreadInbox = 0 }: AppSidebarProps) {
   const pathname = usePathname();
   const { t } = useI18n();
 
@@ -69,9 +72,10 @@ export function AppSidebar({ workspaceName, pendingNotes = 0 }: AppSidebarProps)
           <SidebarGroupContent>
             <SidebarMenu>
               {navItems.map((item) => {
+                // Overview is the parent of every page: highlight it only on itself
                 const isActive =
-                  pathname === item.href || pathname.startsWith(item.href + "/");
-                const badge = item.showBadge && pendingNotes > 0 ? pendingNotes : 0;
+                  pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href + "/"));
+                const badge = item.badge === "notes" ? pendingNotes : item.badge === "inbox" ? unreadInbox : 0;
 
                 return (
                   <SidebarMenuItem key={item.href}>

@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import prisma from "@/lib/prisma";
 import { encrypt } from "@/lib/crypto";
 import { cleanAnswers, linkExpired, parseFields, type Answers } from "@/lib/forms";
+import { recordActivity } from "@/lib/inbox";
 
 /**
  * Saves a patient's answers (opened from the private link, without signing in).
@@ -16,7 +17,18 @@ export async function submitForm(
 ): Promise<{ success: true } | { success: false; error: string }> {
   const request = await prisma.formRequest.findUnique({
     where: { token },
-    select: { id: true, status: true, fields: true, requiresSignature: true, createdAt: true, patient: { select: { deletedAt: true } } },
+    select: {
+      id: true,
+      name: true,
+      workspaceId: true,
+      patientId: true,
+      status: true,
+      fields: true,
+      requiresSignature: true,
+      createdAt: true,
+      patient: { select: { deletedAt: true, firstName: true, lastName: true } },
+      workspace: { select: { language: true } },
+    },
   });
   if (!request || request.status === "CANCELLED" || request.patient.deletedAt || linkExpired(request.createdAt)) {
     return { success: false, error: "This form is no longer available" };
@@ -47,5 +59,20 @@ export async function submitForm(
     },
   });
   if (updated.count === 0) return { success: false, error: "This form was already filled in" };
+
+  const fr = request.workspace.language !== "en";
+  const patientName = `${request.patient.firstName} ${request.patient.lastName}`;
+  await recordActivity({
+    workspaceId: request.workspaceId,
+    type: "FORM_COMPLETED",
+    patientId: request.patientId,
+    formRequestId: request.id,
+    data: { name: request.name, signed: request.requiresSignature },
+    email: {
+      subject: fr ? `Formulaire rempli : ${request.name} (${patientName})` : `Form completed: ${request.name} (${patientName})`,
+      line: fr ? `${patientName} a rempli le formulaire « ${request.name} ».` : `${patientName} completed the form “${request.name}”.`,
+      path: `/dashboard/forms/responses/${request.id}`,
+    },
+  });
   return { success: true };
 }

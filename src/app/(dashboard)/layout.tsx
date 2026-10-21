@@ -4,6 +4,7 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import prisma from "@/lib/prisma";
 import { ensureWorkspace } from "@/lib/workspace";
+import { inboxUnread } from "@/lib/inbox";
 import { I18nProvider } from "@/i18n/client";
 import { toLang, translate } from "@/i18n/core";
 import { localeOf } from "@/lib/format";
@@ -19,7 +20,7 @@ export default async function DashboardLayout({
   // Patient accounts belong in the portal, never in the practitioner dashboard
   if (!(await ensureWorkspace(userId))) redirect("/portal/dashboard");
 
-  const [workspace, pendingNotes] = await Promise.all([
+  const [workspace, pendingNotes, unread] = await Promise.all([
     prisma.workspace.findUnique({
       where: { id: userId },
       select: { name: true, language: true, region: true },
@@ -33,6 +34,7 @@ export default async function DashboardLayout({
         status: { notIn: ["CANCELLED", "NO_SHOW"] },
       },
     }),
+    inboxUnread(userId),
   ]);
 
   const lang = toLang(workspace?.language);
@@ -42,6 +44,7 @@ export default async function DashboardLayout({
         <AppSidebar
           workspaceName={workspace?.name ?? translate(lang, "nav.myPractice")}
           pendingNotes={pendingNotes}
+          unreadInbox={unread.total}
         />
         <SidebarInset className="flex flex-col min-h-screen" lang={lang}>
           {children}

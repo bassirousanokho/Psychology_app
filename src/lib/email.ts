@@ -302,30 +302,20 @@ export async function sendPortalConfirmation(opts: {
   });
 }
 
-/** Tells the practitioner a patient booked, moved or cancelled a session from the portal. */
-export async function sendPractitionerNotice(opts: {
+/** Short email to the practitioner (practice events, new patient message), without clinical content. */
+export async function sendPractitionerAlert(opts: {
   lang: Lang;
   to: string;
-  patientName: string;
-  change: PortalChange;
-  when: string;
-  previousWhen?: string;
-  fee?: string | null;
+  subject: string;
+  line: string; // plain text
   url: string;
 }): Promise<SendStatus> {
   const fr = opts.lang === "fr";
-  const what = {
-    booked: fr ? `a réservé une séance le ${opts.when}` : `booked a session on ${opts.when}`,
-    moved: fr ? `a déplacé sa séance du ${opts.previousWhen} au ${opts.when}` : `moved their session from ${opts.previousWhen} to ${opts.when}`,
-    cancelled: fr ? `a annulé sa séance du ${opts.when}` : `cancelled their session on ${opts.when}`,
-  }[opts.change];
-  const fee = opts.fee
-    ? `<p>${fr ? `Annulation tardive : frais de ${e(opts.fee)} enregistrés (modifiables depuis le calendrier).` : `Late cancellation: a ${e(opts.fee)} fee was recorded (you can change it from the calendar).`}</p>`
-    : "";
   return deliver({
     to: opts.to,
-    subject: fr ? `Portail patient : ${opts.patientName} ${what}` : `Patient portal: ${opts.patientName} ${what}`,
-    html: `<p>${e(opts.patientName)} ${e(what)}.</p>${fee}${button(opts.url, fr ? "Ouvrir le calendrier" : "Open the calendar")}`,
+    subject: opts.subject,
+    html: `<p>${e(opts.line)}</p>${button(opts.url, fr ? "Ouvrir dans l'application" : "Open in the app")}
+      <p style="color:#71717a;font-size:12px;">${fr ? "Vous pouvez désactiver ces courriels dans les paramètres (Messagerie)." : "You can turn these emails off in Settings (Inbox)."}</p>`,
   });
 }
 
@@ -359,25 +349,35 @@ export async function sendFormRequestEmail(opts: {
   });
 }
 
-// ── Message written by the practitioner ──────────────────────────────────────
+// ── New message in the inbox (no content) ────────────────────────────────────
 
 /**
- * Returns "NOT_CONFIGURED" when no email provider is set up (nothing is sent);
- * throws if the provider refuses it.
+ * Tells the patient a message is waiting, without its content: it's read in the
+ * portal or through the private link.
  */
-export async function sendPatientMessage(opts: {
+export async function sendMessageNotice(opts: {
+  lang: Lang;
   to: string;
+  patientName: string;
   practiceName: string;
-  replyTo?: string; // practitioner's own address: replies go to their inbox
-  subject: string;
-  body: string;     // plain text
+  url: string;
+  portal: boolean; // read in the portal (sign-in) rather than through the private link
+  replyTo?: string;
 }): Promise<SendStatus> {
+  const fr = opts.lang === "fr";
+  const how = opts.portal
+    ? fr ? "Connectez-vous à votre portail patient pour le lire et répondre." : "Sign in to your patient portal to read and reply."
+    : fr
+    ? "Pour le lire, ouvrez le lien ci-dessous : on vous demandera les trois premières lettres de votre nom de famille et votre date de naissance."
+    : "To read it, open the link below: you'll be asked for the first three letters of your last name and your date of birth.";
   return deliver({
     to: opts.to,
     fromName: opts.practiceName,
     replyTo: opts.replyTo,
-    subject: opts.subject,
-    html: e(opts.body).replace(/\n/g, "<br>"),
-    text: opts.body,
+    subject: fr ? `Nouveau message de ${opts.practiceName}` : `New message from ${opts.practiceName}`,
+    html: `<p>${fr ? "Bonjour" : "Dear"} ${e(opts.patientName)},</p>
+      <p>${fr ? `${e(opts.practiceName)} vous a envoyé un message.` : `${e(opts.practiceName)} sent you a message.`} ${e(how)}</p>
+      ${button(opts.url, fr ? "Lire le message" : "Read the message")}
+      <p style="color:#71717a;font-size:12px;">${fr ? "Par confidentialité, le contenu n'est pas envoyé par courriel. Ce lien vous est personnel." : "For privacy, the content isn't sent by email. This link is personal."}</p>`,
   });
 }

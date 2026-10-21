@@ -2,7 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { differenceInYears } from "date-fns";
-import { AlertTriangle, ArrowLeft, Cake, CalendarDays, Download, FilePlus2, Mail, MapPin, Phone, UserRound } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Cake, CalendarDays, Download, FilePlus2, Mail, MapPin, MessageSquare, Phone, UserRound } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import prisma from "@/lib/prisma";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,6 @@ import { isHourly } from "@/lib/session-types";
 import { makeI18n, toLang } from "@/i18n/core";
 import { formatMoney, localeOf } from "@/lib/format";
 import { RateCard } from "@/components/patients/rate-card";
-import { PatientMessages } from "@/components/patients/patient-messages";
 import { StatementCard } from "@/components/patients/statement-card";
 import { PatientForms } from "@/components/patients/patient-forms";
 import { decrypt } from "@/lib/crypto";
@@ -58,7 +57,7 @@ export default async function PatientProfilePage({ params }: PageProps) {
         },
       },
       rateChanges: { orderBy: { effectiveFrom: "desc" } },
-      messages: { orderBy: { createdAt: "desc" }, take: 50 },
+      messages: { orderBy: { createdAt: "desc" }, take: 3, include: { _count: { select: { attachments: true } } } },
       documents: {
         orderBy: { createdAt: "desc" },
       },
@@ -238,28 +237,43 @@ export default async function PatientProfilePage({ params }: PageProps) {
             </div>
           )}
 
-          {/* Messages */}
-          <PatientMessages
-            patientId={patient.id}
-            patientName={`${patient.firstName} ${patient.lastName}`}
-            patientEmail={patient.email}
-            disabledReason={
-              patient.deletedAt
-                ? t("messages.deletedReason")
-                : !patient.email
-                ? t("messages.noEmailReason")
-                : null
-            }
-            messages={patient.messages.map((m) => ({
-              id: m.id,
-              subject: m.subject,
-              body: decrypt(m.body) ?? "",
-              toEmail: m.toEmail,
-              status: m.status,
-              error: m.error,
-              createdAt: m.createdAt.toISOString(),
-            }))}
-          />
+          {/* Messages (inbox) */}
+          <div className="rounded-xl border bg-card">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b px-5 py-3">
+              <div>
+                <h2 className="flex items-center gap-2 font-semibold">
+                  <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                  {t("messages.title")}
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  {patient.portalUser
+                    ? t("inbox.access.portal")
+                    : patient.dateOfBirth
+                    ? t("inbox.access.linkHint")
+                    : t("inbox.access.none")}
+                </p>
+              </div>
+              <Button size="sm" variant="outline" render={<Link href={`/dashboard/inbox/${patient.id}`} />}>
+                {patient.messages.length ? t("inbox.openConversation") : t("inbox.write")}
+              </Button>
+            </div>
+            {patient.messages.length === 0 ? (
+              <p className="px-5 py-4 text-sm text-muted-foreground">{t("messages.empty")}</p>
+            ) : (
+              <ul className="divide-y">
+                {patient.messages.map((m) => (
+                  <li key={m.id} className="flex items-start gap-3 px-5 py-2.5 text-sm">
+                    <span className="w-24 shrink-0 text-xs text-muted-foreground">{fmt(m.createdAt, "d MMM, HH:mm")}</span>
+                    <p className={`min-w-0 flex-1 truncate ${m.direction === "FROM_PATIENT" && !m.readAt ? "font-semibold" : ""}`}>
+                      {m.direction === "TO_PATIENT" ? `${t("inbox.you")} : ` : ""}
+                      {m.subject ? `${m.subject} — ` : ""}
+                      {(decrypt(m.body) ?? "").replace(/\s+/g, " ").slice(0, 120) || (m._count.attachments ? t("inbox.attachment") : "")}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
 
           {/* Rate */}
           <RateCard

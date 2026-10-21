@@ -1,11 +1,13 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { format } from "date-fns";
 import { revalidatePath } from "next/cache";
 import prisma from "@/lib/prisma";
 import { requirePatientAuth, type PatientSession } from "@/lib/patient-auth";
 import { psychotherapyRate } from "@/lib/rates";
-import { sendPortalConfirmation, sendPractitionerNotice, type PortalChange } from "@/lib/email";
+import { sendPortalConfirmation, type PortalChange } from "@/lib/email";
+import { recordActivity } from "@/lib/inbox";
 import { formatMoney, formatWhen, langOf, localeOf } from "@/lib/format";
 
 const SESSION_DURATION_MIN = 60;
@@ -27,15 +29,14 @@ async function notify(
   session: PatientSession,
   change: PortalChange,
   start: Date,
-  extra: { previousStart?: Date; fee?: number | null } = {},
+  extra: { previousStart?: Date; fee?: number | null; appointmentId?: string } = {},
 ) {
   const ws = session.workspace;
   const lang = langOf(ws.language);
   const when = formatWhen(start, lang, ws.region);
   const fee = extra.fee ? formatMoney(extra.fee, ws.currency, localeOf(lang, ws.region)) : null;
   const practitioner = await practitionerOf(session.workspaceId);
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-  const day = start.toISOString().slice(0, 10);
+  const day = format(start, "yyyy-MM-dd"); // practice time zone
 
   const sends: Promise<unknown>[] = [];
   if (session.patient.email) {
@@ -53,20 +54,28 @@ async function notify(
       }),
     );
   }
-  if (practitioner?.email) {
-    sends.push(
-      sendPractitionerNotice({
-        lang,
-        to: practitioner.email,
-        patientName: `${session.patient.firstName} ${session.patient.lastName}`,
-        change,
-        when,
-        previousWhen: extra.previousStart ? formatWhen(extra.previousStart, lang, ws.region) : undefined,
-        fee,
-        url: `${appUrl}/dashboard/calendar?view=day&date=${day}`,
-      }),
-    );
-  }
+  // In the practitioner's inbox (and by email if the practice wants it)
+  const name = `${session.patient.firstName} ${session.patient.lastName}`;
+  const previous = extra.previousStart ? formatWhen(extra.previousStart, lang, ws.region) : "";
+  const what = {
+    booked: lang === "fr" ? `a réservé une séance le ${when}` : `booked a session on ${when}`,
+    moved: lang === "fr" ? `a déplacé sa séance du ${previous} au ${when}` : `moved their session from ${previous} to ${when}`,
+    cancelled: lang === "fr" ? `a annulé sa séance du ${when}` : `cancelled their session on ${when}`,
+  }[change];
+  sends.push(
+    recordActivity({
+      workspaceId: session.workspaceId,
+      type: change === "booked" ? "BOOKED" : change === "moved" ? "MOVED" : "CANCELLED",
+      patientId: session.patientId,
+      appointmentId: extra.appointmentId,
+      data: { start: start.toISOString(), previousStart: extra.previousStart?.toISOString() ?? null, fee: extra.fee ?? null },
+      email: {
+        subject: lang === "fr" ? `Portail patient : ${name} ${what}` : `Patient portal: ${name} ${what}`,
+        line: `${name} ${what}.${fee ? (lang === "fr" ? ` Annulation tardive : frais de ${fee}.` : ` Late cancellation: ${fee} fee.`) : ""}`,
+        path: `/dashboard/calendar?view=day&date=${day}`,
+      },
+    }),
+  );
   const results = await Promise.allSettled(sends);
   for (const r of results) if (r.status === "rejected") console.error("[portal notify]", r.reason);
 }
@@ -154,7 +163,7 @@ export async function bookAppointment(input: {
       where: { id: own.appt.id },
       data: { startTime: slot.startTime, endTime: slot.endTime, changedByPatientAt: new Date(), reminderSentAt: null },
     });
-    await notify(session, "moved", slot.startTime, { previousStart: own.appt.startTime });
+    await notify(session, "moved", slot.startTime, { previousStart: own.appt.startTime, appointmentId: own.appt.id });
     revalidatePath("/dashboard/calendar");
     redirect("/portal/appointments");
   }
@@ -165,7 +174,7 @@ export async function bookAppointment(input: {
   const practitioner = await practitionerOf(workspaceId);
   if (!practitioner) return { success: false, error: "No practitioner found in this workspace" };
 
-  await prisma.appointment.create({
+  const created = await prisma.appointment.create({
     data: {
       workspaceId,
       patientId,
@@ -177,7 +186,7 @@ export async function bookAppointment(input: {
       taxRate: workspace.taxRate,
     },
   });
-  await notify(session, "booked", slot.startTime);
+  await notify(session, "booked", slot.startTime, { appointmentId: created.id });
   revalidatePath("/dashboard/calendar");
   redirect("/portal/appointments");
 }
@@ -202,7 +211,7 @@ export async function cancelMyAppointment(
   });
   if (updated.count === 0) return { success: false, error: "This session can no longer be changed online" };
 
-  await notify(session, "cancelled", own.appt.startTime, { fee });
+  await notify(session, "cancelled", own.appt.startTime, { fee, appointmentId: id });
   revalidatePath("/portal/appointments");
   revalidatePath("/portal/dashboard");
   revalidatePath("/dashboard/calendar");

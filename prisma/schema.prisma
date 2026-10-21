@@ -86,6 +86,11 @@ model Workspace {
   // cancellation notice period the session price is charged as a fee by default.
   patientSelfServiceEnabled Boolean @default(true)
 
+  // Inbox: patients may write first (otherwise only reply), and practice events
+  // (bookings, cancellations, forms, patient messages) are also emailed
+  patientCanWriteFirst     Boolean @default(true)
+  practitionerEmailNotices Boolean @default(true)
+
   // Legal mentions printed on invoices and receipts (French "note d'honoraires")
   practitionerName  String? // as printed; defaults to the workspace name
   professionalTitle String? @default("Psychologue")
@@ -128,6 +133,7 @@ model Workspace {
   noteTemplates  NoteTemplate[]
   formTemplates  FormTemplate[]
   formRequests   FormRequest[]
+  activities     Activity[]
 }
 
 // ---------------------------------------------------------------------------
@@ -196,6 +202,12 @@ model Patient {
   // Day-before session reminder emails (practice setting must also be on)
   remindersEnabled Boolean @default(true)
 
+  // Private inbox link for patients without a portal account, opened with the first
+  // letters of the last name and the date of birth. Wrong answers lock it for a while.
+  inboxToken          String?   @unique
+  inboxFailedAttempts Int       @default(0)
+  inboxLockedUntil    DateTime?
+
   // Soft delete: set when the practitioner deletes the patient. The record moves to
   // "Recently deleted" (history and invoices kept) until restored or permanently deleted.
   deletedAt DateTime?
@@ -213,6 +225,7 @@ model Patient {
   messages     Message[]
   statements   Statement[]
   formRequests FormRequest[]
+  activities   Activity[]
 
   @@index([workspaceId])
   @@index([workspaceId, lastName])
@@ -288,7 +301,8 @@ model Document {
   workspaceId   String
   patientId     String
   appointmentId String?
-  uploadedById  String
+  messageId     String? // attached to an inbox message
+  uploadedById  String? // practitioner; null when the patient sent it
 
   name     String
   fileKey  String // GCS object key (used for signed URLs + deletion)
@@ -298,17 +312,20 @@ model Document {
   sharedWithPatient Boolean @default(false)
   // Uploaded instead of typed session notes: never shared with the patient
   isSessionNote     Boolean @default(false)
+  uploadedByPatient Boolean @default(false)
 
   createdAt DateTime @default(now())
 
   workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   patient     Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
   appointment Appointment? @relation(fields: [appointmentId], references: [id])
-  uploadedBy  User         @relation("UploadedDocuments", fields: [uploadedById], references: [id])
+  message     Message?     @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  uploadedBy  User?        @relation("UploadedDocuments", fields: [uploadedById], references: [id])
 
   @@index([workspaceId])
   @@index([patientId])
   @@index([appointmentId])
+  @@index([messageId])
 }
 
 // ---------------------------------------------------------------------------
@@ -477,25 +494,36 @@ enum MessageStatus {
   NOT_CONFIGURED // no email provider set up: saved, not sent
 }
 
-// Emails written to a patient from the app. The body may contain clinical
-// information, so it is stored encrypted (enc:… like session notes).
+enum MessageDirection {
+  TO_PATIENT
+  FROM_PATIENT
+}
+
+// Inbox: one conversation per patient. The body may contain clinical
+// information, so it is stored encrypted (enc:… like session notes). Only a
+// notice without content is emailed (messages written before the inbox were
+// emailed in full).
 model Message {
-  id          String        @id @default(cuid())
+  id          String           @id @default(cuid())
   workspaceId String
   patientId   String
-  senderId    String // Clerk user id
-  toEmail     String
-  subject     String
+  direction   MessageDirection @default(TO_PATIENT)
+  senderId    String? // Clerk user id of the practitioner; null when the patient wrote
+  toEmail     String? // where the email (notice) went
+  subject     String? // emails sent before the inbox
   body        String // encrypted
-  status      MessageStatus
+  status      MessageStatus? // email notice delivery; null when none was sent
   error       String?
-  createdAt   DateTime      @default(now())
+  readAt      DateTime? // read by the recipient
+  createdAt   DateTime         @default(now())
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  patient   Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  patient     Patient    @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  attachments Document[]
 
   @@index([patientId, createdAt])
   @@index([workspaceId])
+  @@index([workspaceId, direction, readAt])
 }
 
 // ---------------------------------------------------------------------------
@@ -581,4 +609,28 @@ model FormRequest {
 
   @@index([workspaceId])
   @@index([patientId])
+}
+
+// ---------------------------------------------------------------------------
+// Activity feed (practitioner inbox)
+// ---------------------------------------------------------------------------
+
+// Practice events shown in the inbox: BOOKED, MOVED, CANCELLED (from the portal),
+// FORM_COMPLETED. `data` holds what the line needs (dates, fee…).
+model Activity {
+  id            String    @id @default(cuid())
+  workspaceId   String
+  type          String
+  patientId     String?
+  appointmentId String?
+  formRequestId String?
+  data          Json?
+  readAt        DateTime?
+  createdAt     DateTime  @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  patient   Patient?  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@index([workspaceId, readAt])
 }

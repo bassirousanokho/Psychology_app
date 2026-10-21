@@ -7,8 +7,10 @@ import session from "./session";
 import billing from "./billing";
 import settings from "./settings";
 import portal from "./portal";
+import invoices from "./invoices";
+import features from "./features";
 
-const areas = [common, shell, overview, patients, calendar, session, billing, settings, portal] as const;
+const areas = [common, shell, overview, patients, calendar, session, billing, settings, portal, invoices, features] as const;
 
 type Areas = (typeof areas)[number];
 // Distributes over the areas, so the result is the union of every area's keys

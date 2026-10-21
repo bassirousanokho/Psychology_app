@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
-import { differenceInMinutes, format } from "date-fns";
+import { format } from "date-fns";
 import { fr, frCA } from "date-fns/locale";
-import { formatDuration, isHourly, SESSION_TYPE_INVOICE_LABELS } from "@/lib/session-types";
 import { IssuerBlock } from "@/components/billing/issuer-block";
 import { regionConfig } from "@/lib/regions";
 import type { TaxLine } from "@/lib/taxes";
@@ -44,15 +43,19 @@ export default async function PublicInvoicePage({ params }: PageProps) {
           invoiceFooterKey: true,
         },
       },
-      appointment: {
-        select: { startTime: true, endTime: true, type: true, status: true, cancellationFee: true },
-      },
+      lines: { orderBy: { position: "asc" } },
+      appointments: { select: { startTime: true }, orderBy: { startTime: "asc" } },
+      creditedInvoice: { select: { invoiceNumber: true, createdAt: true } },
+      creditNote: { select: { invoiceNumber: true, publicToken: true, createdAt: true } },
     },
   });
 
   if (!invoice) notFound();
 
-  const { patient, workspace: ws, appointment } = invoice;
+  const { patient, workspace: ws } = invoice;
+  const creditNote = invoice.kind === "CREDIT_NOTE";
+  // Credit note: billed sessions are those of the cancelled invoice, found through the lines
+  const sessionDates = invoice.appointments.map((a) => a.startTime);
   const cfg = regionConfig(ws.region);
   const dateLocale = cfg.locale === "fr-CA" ? frCA : fr;
   const d = (date: Date, pattern = "d MMMM yyyy") => format(date, pattern, { locale: dateLocale });
@@ -61,7 +64,8 @@ export default async function PublicInvoicePage({ params }: PageProps) {
   const taxAmount = Number(invoice.taxAmount);
   const totalAmount = Number(invoice.totalAmount);
   const taxRate = Number(invoice.taxRate);
-  const isReceipt = invoice.status === "PAID" && invoice.paidAt !== null;
+  const isReceipt = !creditNote && invoice.status === "PAID" && invoice.paidAt !== null;
+  const cancelled = invoice.status === "CANCELLED";
   const taxLines = Array.isArray(invoice.taxLines) ? (invoice.taxLines as unknown as TaxLine[]) : null;
 
   const [headerUrl, footerUrl] = await Promise.all([
@@ -69,19 +73,18 @@ export default async function PublicInvoicePage({ params }: PageProps) {
     ws.invoiceFooterKey ? getSignedReadUrl(ws.invoiceFooterKey) : null,
   ]);
 
-  let lineDescription = SESSION_TYPE_INVOICE_LABELS.PSYCHOTHERAPY;
-  if (appointment) {
-    const date = d(appointment.startTime);
-    const minutes = differenceInMinutes(appointment.endTime, appointment.startTime);
-    if (appointment.status === "CANCELLED" && appointment.cancellationFee) {
-      lineDescription = `Frais d'annulation — séance du ${date}`;
-    } else if (isHourly(appointment.type)) {
-      lineDescription = `${SESSION_TYPE_INVOICE_LABELS[appointment.type]} — ${date} (${formatDuration(minutes)})`;
-    } else {
-      lineDescription = `${SESSION_TYPE_INVOICE_LABELS[appointment.type]} — ${date}`;
-    }
-  }
-
+  const lines = invoice.lines.map((l) => ({
+    id: l.id,
+    description: l.description,
+    quantity: Number(l.quantity),
+    unitPrice: Number(l.unitPrice),
+    discountPercent: Number(l.discountPercent),
+    amount: Number(l.amount),
+  }));
+  // Quantity and unit price columns only when some line needs them
+  const detailed = lines.some((l) => l.quantity !== 1 || l.discountPercent > 0);
+  const qty = (n: number) => n.toLocaleString(cfg.locale, { maximumFractionDigits: 2 });
+  const title = creditNote ? cfg.creditNoteTitle : isReceipt ? cfg.receiptTitle : cfg.invoiceTitle;
 
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4 print:bg-white print:p-0">
@@ -97,7 +100,7 @@ export default async function PublicInvoicePage({ params }: PageProps) {
           <IssuerBlock workspace={ws} />
           <div className="text-right shrink-0">
             <p className="text-xs text-gray-400 uppercase tracking-widest">
-              {isReceipt ? cfg.receiptTitle : cfg.invoiceTitle}
+              {title}
             </p>
             <p className="text-lg font-mono font-semibold">N° {invoice.invoiceNumber}</p>
           </div>
@@ -118,16 +121,23 @@ export default async function PublicInvoicePage({ params }: PageProps) {
               <span className="text-gray-400">Date d&apos;émission</span>
               <span>{d(invoice.createdAt, "dd/MM/yyyy")}</span>
             </div>
-            {appointment && (
+            {sessionDates.length === 1 && (
               <div className="flex justify-between gap-6">
                 <span className="text-gray-400">Date de la séance</span>
-                <span>{d(appointment.startTime, "dd/MM/yyyy")}</span>
+                <span>{d(sessionDates[0], "dd/MM/yyyy")}</span>
               </div>
             )}
-            <div className="flex justify-between gap-6">
-              <span className="text-gray-400">Échéance</span>
-              <span>{d(invoice.dueDate, "dd/MM/yyyy")}</span>
-            </div>
+            {creditNote && invoice.creditedInvoice ? (
+              <div className="flex justify-between gap-6">
+                <span className="text-gray-400">Facture annulée</span>
+                <span className="font-mono">{invoice.creditedInvoice.invoiceNumber}</span>
+              </div>
+            ) : (
+              <div className="flex justify-between gap-6">
+                <span className="text-gray-400">Échéance</span>
+                <span>{d(invoice.dueDate, "dd/MM/yyyy")}</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -136,20 +146,33 @@ export default async function PublicInvoicePage({ params }: PageProps) {
           <thead>
             <tr className="border-b text-left text-xs text-gray-400 uppercase tracking-wide">
               <th className="pb-2 font-medium">Désignation</th>
-              <th className="pb-2 font-medium text-right">Montant</th>
+              {detailed && <th className="pb-2 pl-4 font-medium text-right">Qté</th>}
+              {detailed && <th className="pb-2 pl-4 font-medium text-right">Prix unitaire</th>}
+              <th className="pb-2 pl-4 font-medium text-right">Montant</th>
             </tr>
           </thead>
           <tbody>
-            <tr className="border-b">
-              <td className="py-3">{lineDescription}</td>
-              <td className="py-3 text-right tabular-nums">{money.format(amount)}</td>
-            </tr>
+            {lines.map((l) => (
+              <tr key={l.id} className="border-b align-top">
+                <td className="py-3">
+                  {l.description}
+                  {l.discountPercent > 0 && (
+                    <span className="block text-xs text-gray-500">
+                      Remise {qty(l.discountPercent)} %
+                    </span>
+                  )}
+                </td>
+                {detailed && <td className="py-3 pl-4 text-right tabular-nums">{qty(l.quantity)}</td>}
+                {detailed && <td className="py-3 pl-4 text-right tabular-nums">{money.format(l.unitPrice)}</td>}
+                <td className="py-3 pl-4 text-right tabular-nums">{money.format(l.amount)}</td>
+              </tr>
+            ))}
           </tbody>
           <tfoot>
-            {taxRate > 0 && (
+            {taxAmount !== 0 && (
               <>
                 <tr>
-                  <td className="pt-3 text-right text-gray-400 pr-8">
+                  <td colSpan={detailed ? 3 : 1} className="pt-3 text-right text-gray-400 pr-8">
                     {ws.region === "FR" ? "Total HT" : "Sous-total"}
                   </td>
                   <td className="pt-3 text-right tabular-nums text-gray-400">{money.format(amount)}</td>
@@ -158,7 +181,7 @@ export default async function PublicInvoicePage({ params }: PageProps) {
                   // Québec: TPS and TVQ on separate lines
                   taxLines.map((l) => (
                     <tr key={l.label}>
-                      <td className="pt-1 text-right text-gray-400 pr-8">
+                      <td colSpan={detailed ? 3 : 1} className="pt-1 text-right text-gray-400 pr-8">
                         {l.label} ({l.rate.toLocaleString(cfg.locale, { maximumFractionDigits: 3 })} %)
                       </td>
                       <td className="pt-1 text-right tabular-nums text-gray-400">{money.format(l.amount)}</td>
@@ -166,8 +189,9 @@ export default async function PublicInvoicePage({ params }: PageProps) {
                   ))
                 ) : (
                   <tr>
-                    <td className="pt-1 text-right text-gray-400 pr-8">
-                      {ws.region === "FR" ? "TVA" : "Taxes"} ({taxRate.toLocaleString(cfg.locale, { maximumFractionDigits: 3 })} %)
+                    <td colSpan={detailed ? 3 : 1} className="pt-1 text-right text-gray-400 pr-8">
+                      {ws.region === "FR" ? "TVA" : "Taxes"}
+                      {taxRate > 0 && ` (${taxRate.toLocaleString(cfg.locale, { maximumFractionDigits: 3 })} %)`}
                     </td>
                     <td className="pt-1 text-right tabular-nums text-gray-400">{money.format(taxAmount)}</td>
                   </tr>
@@ -175,8 +199,8 @@ export default async function PublicInvoicePage({ params }: PageProps) {
               </>
             )}
             <tr>
-              <td className="pt-2 text-right font-semibold pr-8">
-                {taxRate > 0 ? (ws.region === "FR" ? "Total TTC" : "Total (taxes incluses)") : "Total"}
+              <td colSpan={detailed ? 3 : 1} className="pt-2 text-right font-semibold pr-8">
+                {taxAmount !== 0 ? (ws.region === "FR" ? "Total TTC" : "Total (taxes incluses)") : "Total"}
               </td>
               <td className="pt-2 text-right tabular-nums font-bold">{money.format(totalAmount)}</td>
             </tr>
@@ -184,26 +208,40 @@ export default async function PublicInvoicePage({ params }: PageProps) {
         </table>
 
         {/* Status */}
-        <div
-          className={`text-center rounded-lg py-3 text-sm font-semibold ${
-            invoice.status === "PAID"
-              ? "bg-green-50 text-green-700"
+        {creditNote ? (
+          <div className="text-center rounded-lg py-3 text-sm font-semibold bg-gray-50 text-gray-600">
+            {invoice.creditedInvoice
+              ? `Annule la facture N° ${invoice.creditedInvoice.invoiceNumber} du ${d(invoice.creditedInvoice.createdAt)}`
+              : cfg.creditNoteTitle}
+          </div>
+        ) : cancelled ? (
+          <div className="text-center rounded-lg py-3 text-sm font-semibold bg-red-50 text-red-700">
+            {invoice.creditNote
+              ? `Facture annulée par ${cfg.creditNoteTitle.toLowerCase()} N° ${invoice.creditNote.invoiceNumber} du ${d(invoice.creditNote.createdAt)}`
+              : "Facture annulée"}
+          </div>
+        ) : (
+          <div
+            className={`text-center rounded-lg py-3 text-sm font-semibold ${
+              invoice.status === "PAID"
+                ? "bg-green-50 text-green-700"
+                : invoice.status === "OVERDUE"
+                ? "bg-red-50 text-red-700"
+                : "bg-gray-50 text-gray-600"
+            }`}
+          >
+            {isReceipt && invoice.paidAt
+              ? `Acquittée le ${d(invoice.paidAt)}`
               : invoice.status === "OVERDUE"
-              ? "bg-red-50 text-red-700"
-              : "bg-gray-50 text-gray-600"
-          }`}
-        >
-          {isReceipt && invoice.paidAt
-            ? `Acquittée le ${d(invoice.paidAt)}`
-            : invoice.status === "OVERDUE"
-            ? "Paiement en retard"
-            : "En attente de paiement"}
-        </div>
+              ? "Paiement en retard"
+              : "En attente de paiement"}
+          </div>
+        )}
 
         {/* Legal mentions */}
         <div className="mt-6 space-y-1 border-t pt-4 text-xs text-gray-500">
-          {taxRate === 0 && ws.vatMention && <p>{ws.vatMention}</p>}
-          {ws.paymentTerms && <p>Conditions de paiement : {ws.paymentTerms}</p>}
+          {taxAmount === 0 && ws.vatMention && <p>{ws.vatMention}</p>}
+          {!creditNote && ws.paymentTerms && <p>Conditions de paiement : {ws.paymentTerms}</p>}
           {ws.invoiceNotes && <p className="whitespace-pre-line">{ws.invoiceNotes}</p>}
           {invoice.notes && <p className="whitespace-pre-line">{invoice.notes}</p>}
         </div>

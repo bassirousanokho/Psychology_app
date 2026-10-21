@@ -16,6 +16,8 @@ type RegionConfig = {
   locale: string; // invoice language / number and date formats
   invoiceTitle: string;
   receiptTitle: string;
+  creditNoteTitle: string; // document cancelling an invoice
+  creditNotePrefix: string; // its numbering: NC-2026-0001
   taxMention: string; // pre-filled tax exemption mention
   paymentTerms: string;
   addressPlaceholder: string;
@@ -32,6 +34,8 @@ export const REGION_CONFIG: Record<Region, RegionConfig> = {
     locale: "fr-CA",
     invoiceTitle: "Facture",
     receiptTitle: "Reçu",
+    creditNoteTitle: "Note de crédit",
+    creditNotePrefix: "NC",
     taxMention: "Services de psychothérapie exonérés de TPS et de TVQ.",
     paymentTerms: "Paiement exigible le jour de la séance.",
     addressPlaceholder: "1234 rue Saint-Denis\nMontréal (Québec) H2X 3K2",
@@ -50,6 +54,8 @@ export const REGION_CONFIG: Record<Region, RegionConfig> = {
     locale: "fr-FR",
     invoiceTitle: "Note d'honoraires",
     receiptTitle: "Reçu",
+    creditNoteTitle: "Avoir",
+    creditNotePrefix: "AV",
     taxMention: "TVA non applicable, art. 261-4-1° du CGI",
     paymentTerms: "Paiement à réception, le jour de la séance.",
     addressPlaceholder: "12 rue de la Paix\n75002 Paris",

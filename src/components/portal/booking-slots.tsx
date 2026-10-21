@@ -15,6 +15,8 @@ interface BookingSlotsProps {
   workingHoursEnd: string;      // "HH:mm"
   /** Map from YYYY-MM-DD → busy [startMinute, endMinute] ranges from local midnight */
   busyByDate: Record<string, [number, number][]>;
+  /** Moving this session instead of booking a new one */
+  rescheduleId?: string;
 }
 
 function isoDay(d: Date): number {
@@ -30,6 +32,7 @@ export function BookingSlots({
   workingHoursStart,
   workingHoursEnd,
   busyByDate,
+  rescheduleId,
 }: BookingSlotsProps) {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedHour, setSelectedHour] = useState<number | null>(null);
@@ -67,6 +70,7 @@ export function BookingSlots({
       const result = await bookAppointment({
         date: toDateKey(selectedDate),
         hour: selectedHour,
+        rescheduleId,
       });
       if (result && !result.success) {
         toast.error(tError(result.error));
@@ -158,7 +162,7 @@ export function BookingSlots({
           </div>
           <Button onClick={handleBook} disabled={isPending}>
             {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {t("portal.confirmBooking")}
+            {rescheduleId ? t("portal.confirmMove") : t("portal.confirmBooking")}
           </Button>
         </div>
       )}

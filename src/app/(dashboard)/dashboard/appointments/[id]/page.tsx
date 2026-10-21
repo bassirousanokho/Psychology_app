@@ -60,6 +60,7 @@ export default async function AppointmentPage({ params }: PageProps) {
           publicToken: true,
           paidAt: true,
           receiptSentAt: true,
+          _count: { select: { appointments: true } },
         },
       },
       documents: {
@@ -73,6 +74,12 @@ export default async function AppointmentPage({ params }: PageProps) {
   });
 
   if (!raw) notFound();
+
+  const templates = await prisma.noteTemplate.findMany({
+    where: { workspaceId: userId },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true, body: true },
+  });
 
   // Audit the note view (fire-and-forget)
   audit({
@@ -116,6 +123,7 @@ export default async function AppointmentPage({ params }: PageProps) {
         publicToken: raw.invoice.publicToken,
         paidAt: raw.invoice.paidAt?.toISOString() ?? null,
         receiptSentAt: raw.invoice.receiptSentAt?.toISOString() ?? null,
+        sessionCount: raw.invoice._count.appointments,
       }
     : null;
 
@@ -225,7 +233,7 @@ export default async function AppointmentPage({ params }: PageProps) {
           )}
 
           {/* ── Session editor (Client Component) ── */}
-          {raw.status !== "CANCELLED" && <SessionEditor appointment={appointment} />}
+          {raw.status !== "CANCELLED" && <SessionEditor appointment={appointment} templates={templates} />}
 
           {/* ── Uploaded notes (instead of, or alongside, typed notes) ── */}
           {raw.status !== "CANCELLED" && (
@@ -256,6 +264,7 @@ export default async function AppointmentPage({ params }: PageProps) {
           {(billable || invoice) && (
             <InvoicePanel
               appointmentId={appointment.id}
+              patientId={raw.patient.id}
               invoice={invoice}
               currency={currency}
               patientHasEmail={!!raw.patient.email}

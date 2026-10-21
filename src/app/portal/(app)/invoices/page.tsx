@@ -12,6 +12,7 @@ const STATUS_VARIANTS = {
   SENT:    "default",
   PAID:    "default",
   OVERDUE: "destructive",
+  CANCELLED: "outline",
 } as const;
 
 export default async function PortalInvoicesPage() {
@@ -22,7 +23,11 @@ export default async function PortalInvoicesPage() {
     where: {
       workspaceId: session.workspaceId,
       patientId: session.patientId,
-      status: { in: ["SENT", "PAID", "OVERDUE"] }, // don't show DRAFT to patients
+      // Drafts aren't shown to patients, nor drafts withdrawn before being sent
+      OR: [
+        { status: { in: ["SENT", "PAID", "OVERDUE"] } },
+        { status: "CANCELLED", OR: [{ sentAt: { not: null } }, { paidAt: { not: null } }] },
+      ],
     },
     orderBy: { createdAt: "desc" },
   });
@@ -47,13 +52,15 @@ export default async function PortalInvoicesPage() {
                   <p className="text-sm font-medium">{inv.invoiceNumber}</p>
                   <p className="text-xs text-muted-foreground">
                     {money(Number(inv.totalAmount), session.workspace.currency)} ·{" "}
-                    {t("portal.due", { date: fmt(inv.dueDate, "d MMM yyyy") })}
-                    {inv.paidAt && t("portal.paidOn", { date: fmt(inv.paidAt, "d MMM yyyy") })}
+                    {inv.kind === "CREDIT_NOTE"
+                      ? fmt(inv.createdAt, "d MMM yyyy")
+                      : t("portal.due", { date: fmt(inv.dueDate, "d MMM yyyy") })}
+                    {inv.kind === "INVOICE" && inv.paidAt && t("portal.paidOn", { date: fmt(inv.paidAt, "d MMM yyyy") })}
                   </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <Badge variant={STATUS_VARIANTS[inv.status]}>
-                    {t(`invoiceStatus.${inv.status}`)}
+                  <Badge variant={inv.kind === "CREDIT_NOTE" ? "secondary" : STATUS_VARIANTS[inv.status]}>
+                    {inv.kind === "CREDIT_NOTE" ? t("portal.creditNote") : t(`invoiceStatus.${inv.status}`)}
                   </Badge>
                   <Button
                     variant="ghost"

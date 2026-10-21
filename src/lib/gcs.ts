@@ -34,3 +34,9 @@ export async function getSignedReadUrl(key: string): Promise<string> {
 export async function deleteFile(key: string): Promise<void> {
   await bucket().file(key).delete({ ignoreNotFound: true });
 }
+
+/** Downloads a stored file (data exports). */
+export async function downloadFile(key: string): Promise<Buffer> {
+  const [data] = await bucket().file(key).download();
+  return data;
+}

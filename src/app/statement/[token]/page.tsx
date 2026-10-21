@@ -3,7 +3,6 @@ import { addDays, format } from "date-fns";
 import { fr, frCA } from "date-fns/locale";
 import prisma from "@/lib/prisma";
 import { regionConfig } from "@/lib/regions";
-import { SESSION_TYPE_INVOICE_LABELS } from "@/lib/session-types";
 import { getSignedReadUrl } from "@/lib/gcs";
 import { IssuerBlock, ISSUER_SELECT } from "@/components/billing/issuer-block";
 import { PrintButton } from "@/components/billing/print-button";
@@ -37,11 +36,14 @@ export default async function StatementPage({ params }: PageProps) {
     where: {
       patientId: patient.id,
       workspaceId: statement.workspaceId,
-      status: "PAID",
+      kind: "INVOICE",
+      status: "PAID", // invoices cancelled since are left out
       paidAt: { gte: statement.periodStart, lt: addDays(statement.periodEnd, 1) },
     },
     orderBy: { paidAt: "asc" },
-    include: { appointment: { select: { startTime: true, type: true, status: true } } },
+    include: {
+      lines: { orderBy: { position: "asc" }, select: { description: true, appointment: { select: { startTime: true } } } },
+    },
   });
   const total = invoices.reduce((sum, i) => sum + Number(i.totalAmount), 0);
 
@@ -93,18 +95,17 @@ export default async function StatementPage({ params }: PageProps) {
               </tr>
             </thead>
             <tbody>
-              {invoices.map((inv) => (
-                <tr key={inv.id} className="border-b">
-                  <td className="py-2">{inv.appointment ? d(inv.appointment.startTime, "dd/MM/yyyy") : "—"}</td>
-                  <td className="py-2">
-                    {inv.appointment?.status === "CANCELLED"
-                      ? "Frais d'annulation"
-                      : SESSION_TYPE_INVOICE_LABELS[inv.appointment?.type ?? "PSYCHOTHERAPY"]}
-                  </td>
-                  <td className="py-2 font-mono text-xs">{inv.invoiceNumber}</td>
-                  <td className="py-2 text-right tabular-nums">{money.format(Number(inv.totalAmount))}</td>
-                </tr>
-              ))}
+              {invoices.map((inv) => {
+                const dates = [...new Set(inv.lines.flatMap((l) => (l.appointment ? [d(l.appointment.startTime, "dd/MM/yyyy")] : [])))];
+                return (
+                  <tr key={inv.id} className="border-b align-top">
+                    <td className="py-2">{dates.length ? dates.join(", ") : "—"}</td>
+                    <td className="py-2">{inv.lines.map((l) => l.description.split(" — ")[0]).filter((v, i, a) => a.indexOf(v) === i).join(", ")}</td>
+                    <td className="py-2 font-mono text-xs">{inv.invoiceNumber}</td>
+                    <td className="py-2 text-right tabular-nums">{money.format(Number(inv.totalAmount))}</td>
+                  </tr>
+                );
+              })}
             </tbody>
             <tfoot>
               <tr>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useTransition } from "react";
+import Link from "next/link";
 import {
   CheckCircle2,
   Loader2,
@@ -37,8 +38,11 @@ export type SessionAppointment = {
   };
 };
 
+export type NoteTemplateOption = { id: string; name: string; body: string };
+
 interface SessionEditorProps {
   appointment: SessionAppointment;
+  templates: NoteTemplateOption[];
 }
 
 // ── Save indicator ────────────────────────────────────────────────────────────
@@ -64,7 +68,7 @@ function SaveIndicator({ state }: { state: SaveIndicator }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export function SessionEditor({ appointment }: SessionEditorProps) {
+export function SessionEditor({ appointment, templates }: SessionEditorProps) {
   const [notes, setNotes]         = useState(appointment.sessionNotes ?? "");
   const [saveState, setSaveState] = useState<SaveIndicator>("idle");
   const [isPending, startTransition] = useTransition();
@@ -105,6 +109,13 @@ export function SessionEditor({ appointment }: SessionEditorProps) {
         toast.error(tError(result.error));
       }
     });
+  }
+
+  // ── Insert a template (appended when notes are already written) ──
+  function insertTemplate(id: string) {
+    const tpl = templates.find((x) => x.id === id);
+    if (!tpl) return;
+    setNotes((current) => (current.trim() ? `${current.trimEnd()}\n\n${tpl.body}` : tpl.body));
   }
 
   // ── Mark as completed ──
@@ -172,11 +183,32 @@ export function SessionEditor({ appointment }: SessionEditorProps) {
 
       {/* ── Notes editor ── */}
       <section>
-        <div className="mb-2 flex items-center justify-between">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
             {t("editor.notes")}
           </h3>
-          <SaveIndicator state={saveState} />
+          <div className="flex items-center gap-3">
+            <SaveIndicator state={saveState} />
+            {!isCompleted && (
+              templates.length > 0 ? (
+                <select
+                  value=""
+                  onChange={(e) => insertTemplate(e.target.value)}
+                  aria-label={t("editor.insertTemplate")}
+                  className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+                >
+                  <option value="">{t("editor.insertTemplate")}</option>
+                  {templates.map((tpl) => (
+                    <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
+                  ))}
+                </select>
+              ) : (
+                <Link href="/dashboard/notes/templates" className="text-xs text-muted-foreground underline underline-offset-2">
+                  {t("editor.setUpTemplates")}
+                </Link>
+              )
+            )}
+          </div>
         </div>
 
         <Textarea

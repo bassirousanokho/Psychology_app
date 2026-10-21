@@ -3,7 +3,7 @@
 import { useTransition } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { CheckCircle, ExternalLink, FileText, Loader2, Mail, Receipt, Send, Undo2 } from "lucide-react";
+import { CheckCircle, ExternalLink, FilePlus2, FileText, Loader2, Mail, Pencil, Receipt, Send, Undo2 } from "lucide-react";
 import { markInvoiceUnpaid, sendInvoice } from "@/app/(dashboard)/dashboard/billing/actions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -18,8 +18,9 @@ export type InvoiceSummary = {
   id: string;
   invoiceNumber: string;
   totalAmount: number;
-  status: "DRAFT" | "SENT" | "PAID" | "OVERDUE";
+  status: "DRAFT" | "SENT" | "PAID" | "OVERDUE" | "CANCELLED";
   publicToken: string;
+  sessionCount: number; // sessions billed on this invoice
   paidAt: string | null;        // ISO
   receiptSentAt: string | null; // ISO
 };
@@ -32,10 +33,12 @@ const STATUS_VARIANTS: Record<
   SENT: "default",
   PAID: "default",
   OVERDUE: "destructive",
+  CANCELLED: "outline",
 };
 
 interface InvoicePanelProps {
   appointmentId: string;
+  patientId: string;
   invoice: InvoiceSummary | null;
   currency: string;
   patientHasEmail: boolean;
@@ -43,7 +46,7 @@ interface InvoicePanelProps {
 
 // `invoice` comes from the server: the actions revalidate the page, so changes
 // arrive as props (no local copy that could go stale)
-export function InvoicePanel({ appointmentId, invoice, currency, patientHasEmail }: InvoicePanelProps) {
+export function InvoicePanel({ appointmentId, patientId, invoice, currency, patientHasEmail }: InvoicePanelProps) {
   const [isPending, startTransition] = useTransition();
   const { t, fmt, tError, money: formatAmount } = useI18n();
   const money = (n: number) => formatAmount(n, currency);
@@ -70,7 +73,14 @@ export function InvoicePanel({ appointmentId, invoice, currency, patientHasEmail
         <div className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <p className="font-medium">{invoice.invoiceNumber}</p>
+              <Link href={`/dashboard/billing/${invoice.id}`} className="font-medium hover:underline">
+                {invoice.invoiceNumber}
+              </Link>
+              {invoice.sessionCount > 1 && (
+                <span className="ml-2 text-xs text-muted-foreground">
+                  {t("invoicePanel.sessionCount", { count: invoice.sessionCount })}
+                </span>
+              )}
               <p className="mt-0.5 text-sm text-muted-foreground">
                 {money(invoice.totalAmount)}
                 {paid && invoice.paidAt && t("invoicePanel.paidOn", { date: fmt(invoice.paidAt, "d MMM yyyy") })}
@@ -91,6 +101,10 @@ export function InvoicePanel({ appointmentId, invoice, currency, patientHasEmail
           </div>
 
           <div className="flex flex-wrap items-center gap-2 border-t pt-4">
+            <Button size="sm" variant="ghost" render={<Link href={`/dashboard/billing/${invoice.id}`} />}>
+              <Pencil className="mr-2 h-4 w-4" />
+              {invoice.status === "DRAFT" ? t("invoicePanel.edit") : t("invoicePanel.details")}
+            </Button>
             {!paid && (
               <Button
                 size="sm"
@@ -173,6 +187,14 @@ export function InvoicePanel({ appointmentId, invoice, currency, patientHasEmail
             >
               <FileText className="mr-2 h-4 w-4" />
               {t("invoicePanel.generate")}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              render={<Link href={`/dashboard/billing/new?patient=${patientId}&appointment=${appointmentId}`} />}
+            >
+              <FilePlus2 className="mr-2 h-4 w-4" />
+              {t("invoicePanel.custom")}
             </Button>
           </div>
         </div>

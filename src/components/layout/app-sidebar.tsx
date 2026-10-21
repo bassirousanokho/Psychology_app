@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
 import {
+  BarChart3,
+  ClipboardList,
   LayoutDashboard,
   CalendarDays,
   Users,
@@ -35,7 +37,9 @@ const navItems: { label: MessageKey; href: string; icon: LucideIcon; showBadge?:
   { label: "nav.calendar", href: "/dashboard/calendar", icon: CalendarDays },
   { label: "nav.patients", href: "/dashboard/patients", icon: Users },
   { label: "nav.notes",    href: "/dashboard/notes",    icon: FileText, showBadge: true },
+  { label: "nav.forms",    href: "/dashboard/forms",    icon: ClipboardList },
   { label: "nav.billing",  href: "/dashboard/billing",  icon: Receipt },
+  { label: "nav.reports",  href: "/dashboard/reports",  icon: BarChart3 },
 ]
 
 interface AppSidebarProps {

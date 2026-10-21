@@ -36,7 +36,10 @@ export type AuditAction =
   | "RESTORE_PATIENT"
   | "PURGE_PATIENT"
   | "SEND_MESSAGE"
-  | "VIEW_NOTES_LIST";
+  | "VIEW_NOTES_LIST"
+  | "SEND_FORM"
+  | "VIEW_FORM_RESPONSE"
+  | "CANCEL_INVOICE";
 
 /**
  * Writes an audit log entry asynchronously (fire-and-forget).
@@ -46,7 +49,7 @@ export function audit(params: {
   workspaceId: string;
   userId: string;
   action: AuditAction;
-  resourceType: "Patient" | "Appointment" | "Document";
+  resourceType: "Patient" | "Appointment" | "Document" | "FormRequest" | "Invoice";
   resourceId: string;
   metadata?: Prisma.InputJsonValue;
 }): void {

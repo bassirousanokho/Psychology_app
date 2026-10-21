@@ -3,12 +3,12 @@ import { NextResponse } from "next/server";
 import { format } from "date-fns";
 import prisma from "@/lib/prisma";
 import { langOf } from "@/lib/format";
-import { SESSION_TYPE_INVOICE_LABELS } from "@/lib/session-types";
 
 /**
  * Accounting export for one year:
- * - kind=invoices: every invoice issued that year
- * - kind=monthly: invoiced (by issue date) and collected (by payment date) per month
+ * - kind=invoices: every invoice and credit note issued that year
+ * - kind=monthly: invoiced (by issue date, net of credit notes) and collected
+ *   (by payment date, net of refunds) per month
  * French practices get semicolon-separated values with decimal commas (what
  * French-language Excel expects); English ones get commas and decimal points.
  */
@@ -36,32 +36,37 @@ export async function GET(request: Request) {
       orderBy: { createdAt: "asc" },
       include: {
         patient: { select: { firstName: true, lastName: true } },
-        appointment: { select: { startTime: true, type: true, status: true } },
+        lines: { orderBy: { position: "asc" }, select: { description: true, appointment: { select: { startTime: true } } } },
+        creditedInvoice: { select: { invoiceNumber: true } },
       },
     });
     rows = [
       line(
         fr
-          ? ["N° facture", "Date d'émission", "Date de la séance", "Patient", "Désignation", "Montant", "Taxes", "Total", "Devise", "Statut", "Date de paiement"]
-          : ["Invoice", "Issue date", "Session date", "Patient", "Description", "Amount", "Tax", "Total", "Currency", "Status", "Paid on"],
+          ? ["N° facture", "Type", "Date d'émission", "Date de la séance", "Patient", "Désignation", "Montant", "Taxes", "Total", "Devise", "Statut", "Date de paiement", "Facture annulée"]
+          : ["Invoice", "Type", "Issue date", "Session date", "Patient", "Description", "Amount", "Tax", "Total", "Currency", "Status", "Paid on", "Cancels invoice"],
       ),
-      ...invoices.map((inv) =>
-        line([
+      ...invoices.map((inv) => {
+        const sessionDates = [
+          ...new Set(inv.lines.flatMap((l) => (l.appointment ? [format(l.appointment.startTime, "yyyy-MM-dd")] : []))),
+        ];
+        const creditNote = inv.kind === "CREDIT_NOTE";
+        return line([
           inv.invoiceNumber,
+          creditNote ? (fr ? "Note de crédit" : "Credit note") : fr ? "Facture" : "Invoice",
           format(inv.createdAt, "yyyy-MM-dd"),
-          inv.appointment ? format(inv.appointment.startTime, "yyyy-MM-dd") : "",
+          sessionDates.join(" "),
           `${inv.patient.lastName}, ${inv.patient.firstName}`,
-          inv.appointment?.status === "CANCELLED"
-            ? fr ? "Frais d'annulation" : "Cancellation fee"
-            : SESSION_TYPE_INVOICE_LABELS[inv.appointment?.type ?? "PSYCHOTHERAPY"],
+          inv.lines.map((l) => l.description).join(" + "),
           num(Number(inv.amount)),
           num(Number(inv.taxAmount)),
           num(Number(inv.totalAmount)),
           ws?.currency ?? "",
-          inv.status,
+          creditNote ? (inv.paidAt ? "REFUNDED" : "ISSUED") : inv.status,
           inv.paidAt ? format(inv.paidAt, "yyyy-MM-dd") : "",
-        ]),
-      ),
+          inv.creditedInvoice?.invoiceNumber ?? "",
+        ]);
+      }),
     ];
   } else {
     const [issued, paid] = await Promise.all([
@@ -70,7 +75,8 @@ export async function GET(request: Request) {
         select: { createdAt: true, totalAmount: true },
       }),
       prisma.invoice.findMany({
-        where: { workspaceId: userId, status: "PAID", paidAt: { gte: from, lt: to } },
+        // Paid invoices, and refunds (credit notes of paid invoices, negative)
+        where: { workspaceId: userId, paidAt: { gte: from, lt: to } },
         select: { paidAt: true, amount: true, taxAmount: true, totalAmount: true },
       }),
     ]);

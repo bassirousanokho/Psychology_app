@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
-import { CalendarPlus, CalendarDays, FileText, FolderOpen, LayoutDashboard } from "lucide-react";
+import { CalendarPlus, CalendarDays, ClipboardList, FileText, FolderOpen, LayoutDashboard } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/i18n/client";
 
@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { href: "/portal/book",         label: "portal.nav.book",         icon: CalendarPlus },
   { href: "/portal/appointments", label: "portal.nav.appointments", icon: CalendarDays },
   { href: "/portal/invoices",     label: "portal.nav.invoices",     icon: FileText },
+  { href: "/portal/forms",        label: "portal.nav.forms",        icon: ClipboardList },
   { href: "/portal/documents",    label: "portal.nav.documents",    icon: FolderOpen },
 ] as const;
 

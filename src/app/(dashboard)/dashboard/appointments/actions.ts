@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import prisma from "@/lib/prisma";
 import { sendReceiptEmail, type SendStatus } from "@/lib/email";
 import { formatLongDate, formatMoney, langOf, localeOf } from "@/lib/format";
-import { taxLinesFor } from "@/lib/taxes";
+import { createInvoiceWithLines, sessionLine } from "@/lib/invoices";
 
 type ActionResult = { success: true } | { success: false; error: string };
 
@@ -13,21 +13,6 @@ async function getOrgId() {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
   return userId;
-}
-
-/**
- * Next number in this workspace's sequence for the current year (INV-2026-0001, …).
- * Based on the highest existing number rather than a count, so it never reuses one.
- */
-async function nextInvoiceNumber(workspaceId: string): Promise<string> {
-  const prefix = `INV-${new Date().getFullYear()}-`;
-  const last = await prisma.invoice.findFirst({
-    where: { workspaceId, invoiceNumber: { startsWith: prefix } },
-    orderBy: { invoiceNumber: "desc" },
-    select: { invoiceNumber: true },
-  });
-  const seq = last ? Number(last.invoiceNumber.slice(prefix.length)) + 1 : 1;
-  return `${prefix}${String(seq).padStart(4, "0")}`;
 }
 
 function revalidateBilling(appointmentId: string) {
@@ -47,13 +32,9 @@ async function createInvoice(
 ): Promise<{ success: true; invoiceId: string } | { success: false; error: string }> {
   const appointment = await prisma.appointment.findFirst({
     where: { id: appointmentId, workspaceId },
-    include: {
-      invoice: { select: { id: true } },
-      workspace: { select: { region: true, gstRate: true, qstRate: true } },
-    },
   });
   if (!appointment) return { success: false, error: "Appointment not found" };
-  if (appointment.invoice) return { success: true, invoiceId: appointment.invoice.id };
+  if (appointment.invoiceId) return { success: true, invoiceId: appointment.invoiceId };
 
   const fee = appointment.cancellationFee;
   const chargedCancellation = appointment.status === "CANCELLED" && fee !== null && fee.gt(0);
@@ -61,61 +42,27 @@ async function createInvoice(
     return { success: false, error: "Only completed sessions or charged cancellations can be invoiced" };
   }
 
-  const amount = chargedCancellation ? fee : appointment.tariffAmount;
-  const taxRate = appointment.taxRate;
-  // Québec: the booked rate is split into TPS and TVQ lines (one line elsewhere)
-  const ws = appointment.workspace;
-  const taxLines = taxLinesFor(Number(amount), Number(taxRate), ws.region, Number(ws.gstRate), Number(ws.qstRate));
-  const taxAmount = taxLines
-    ? taxLines.reduce((sum, l) => sum + l.amount, 0).toFixed(2)
-    : amount.mul(taxRate).div(100).toDecimalPlaces(2);
-  const totalAmount = amount.add(taxAmount);
-
-  // Two invoices generated at the same moment could pick the same number: the
-  // (workspaceId, invoiceNumber) unique index rejects one, which then retries.
-  for (let attempt = 0; ; attempt++) {
-    const invoiceNumber = await nextInvoiceNumber(workspaceId);
-    try {
-      const invoice = await prisma.invoice.create({
-        data: {
-          workspaceId,
-          patientId: appointment.patientId,
-          appointmentId,
-          invoiceNumber,
-          amount,
-          taxAmount,
-          taxRate,
-          taxLines: taxLines ?? undefined,
-          totalAmount,
-          status: "DRAFT",
-          dueDate: appointment.startTime,
-        },
-      });
-      return { success: true, invoiceId: invoice.id };
-    } catch (err) {
-      // Unique violation: which constraint is reported differently by driver adapters,
-      // so look for the field name anywhere in the error metadata
-      const { code, meta } = err as { code?: string; meta?: unknown };
-      if (code === "P2002") {
-        if (JSON.stringify(meta ?? {}).includes("appointmentId")) {
-          const existing = await prisma.invoice.findUnique({ where: { appointmentId }, select: { id: true } });
-          if (existing) return { success: true, invoiceId: existing.id };
-        }
-        if (attempt < 3) continue;
-      }
-      console.error("[createInvoice]", err);
-      return { success: false, error: "Failed to create invoice" };
-    }
+  const result = await createInvoiceWithLines({
+    workspaceId,
+    patientId: appointment.patientId,
+    lines: [sessionLine(appointment)],
+    dueDate: appointment.startTime,
+  });
+  if (!result.success && result.error === "A session on this invoice is already invoiced") {
+    // Created meanwhile (double click): use that one
+    const existing = await prisma.appointment.findUnique({ where: { id: appointmentId }, select: { invoiceId: true } });
+    if (existing?.invoiceId) return { success: true, invoiceId: existing.invoiceId };
   }
+  return result;
 }
 
 export async function generateInvoice(appointmentId: string): Promise<ActionResult> {
   const workspaceId = await getOrgId();
-  const existing = await prisma.invoice.findFirst({
-    where: { appointmentId, workspaceId },
-    select: { id: true },
+  const existing = await prisma.appointment.findFirst({
+    where: { id: appointmentId, workspaceId },
+    select: { invoiceId: true },
   });
-  if (existing) return { success: false, error: "Invoice already exists" };
+  if (existing?.invoiceId) return { success: false, error: "Invoice already exists" };
 
   const result = await createInvoice(workspaceId, appointmentId);
   if (!result.success) return result;
@@ -130,7 +77,7 @@ export async function markAppointmentPaid(appointmentId: string): Promise<Action
   if (!result.success) return result;
 
   await prisma.invoice.updateMany({
-    where: { id: result.invoiceId, workspaceId, status: { not: "PAID" } },
+    where: { id: result.invoiceId, workspaceId, kind: "INVOICE", status: { in: ["DRAFT", "SENT", "OVERDUE"] } },
     data: { status: "PAID", paidAt: new Date() },
   });
   revalidateBilling(appointmentId);
@@ -150,7 +97,7 @@ export async function sendReceipt(invoiceId: string): Promise<ActionResult> {
     },
   });
   if (!invoice) return { success: false, error: "Invoice not found" };
-  if (invoice.status !== "PAID" || !invoice.paidAt) {
+  if (invoice.kind !== "INVOICE" || invoice.status !== "PAID" || !invoice.paidAt) {
     return { success: false, error: "A receipt can only be sent for a paid invoice" };
   }
   if (!invoice.patient.email) return { success: false, error: "Patient has no email address on file" };
@@ -179,7 +126,7 @@ export async function sendReceipt(invoiceId: string): Promise<ActionResult> {
   }
 
   await prisma.invoice.update({ where: { id: invoiceId }, data: { receiptSentAt: new Date() } });
-  if (invoice.appointmentId) revalidateBilling(invoice.appointmentId);
-  else revalidatePath("/dashboard/billing");
+  revalidatePath("/dashboard/billing", "layout");
+  revalidatePath("/dashboard/appointments", "layout");
   return { success: true };
 }

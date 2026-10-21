@@ -33,7 +33,7 @@ import { isHourly } from "@/lib/session-types";
 import { useI18n } from "@/i18n/client";
 import type { I18n } from "@/i18n/core";
 import { BookingForm, type Availability } from "./booking-dialog";
-import type { CalendarAppointment } from "./week-calendar";
+import type { CalendarAppointment } from "./calendar-view";
 
 const STATUS_VARIANTS: Record<
   CalendarAppointment["status"],

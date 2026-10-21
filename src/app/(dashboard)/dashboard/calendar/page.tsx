@@ -1,35 +1,45 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
-import { startOfWeek, endOfWeek, format } from "date-fns";
+import { endOfDay, endOfMonth, endOfWeek, format, startOfDay, startOfMonth, startOfWeek } from "date-fns";
 import { Header } from "@/components/layout/header";
 import { getI18n } from "@/i18n/server";
 import prisma from "@/lib/prisma";
-import { WeekCalendar, type CalendarAppointment } from "@/components/calendar/week-calendar";
+import { CalendarView, type CalendarAppointment, type CalendarViewMode } from "@/components/calendar/calendar-view";
 import { BookAppointmentButton, type Availability } from "@/components/calendar/booking-dialog";
 import type { PatientOption } from "@/components/calendar/patient-combobox";
 
 interface CalendarPageProps {
-  searchParams: Promise<{ week?: string }>;
+  searchParams: Promise<{ view?: string; date?: string; week?: string }>;
 }
+
+const VIEWS: CalendarViewMode[] = ["day", "week", "month"];
 
 export default async function CalendarPage({ searchParams }: CalendarPageProps) {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 
-  const { week } = await searchParams;
+  const params = await searchParams;
+  const view: CalendarViewMode = VIEWS.includes(params.view as CalendarViewMode) ? (params.view as CalendarViewMode) : "week";
+  // `week` is the older link format (the Monday of the week)
+  const requested = params.date ?? params.week;
+  const parsed = requested && /^\d{4}-\d{2}-\d{2}$/.test(requested) ? new Date(requested + "T00:00:00") : null;
+  const anchor = parsed && !isNaN(parsed.getTime()) ? parsed : new Date();
+  const anchorISO = format(anchor, "yyyy-MM-dd");
 
-  // Derive the Monday of the requested week (or current week if none supplied)
-  const refDate = week ? new Date(week + "T00:00:00") : new Date();
-  const weekStart = startOfWeek(refDate, { weekStartsOn: 1 });
-  const weekEnd   = endOfWeek(refDate,   { weekStartsOn: 1 });
-  const weekISO   = format(weekStart, "yyyy-MM-dd");
+  // Range shown: the day, the week (Monday–Sunday), or the whole weeks covering the month
+  const [rangeStart, rangeEnd] =
+    view === "day"
+      ? [startOfDay(anchor), endOfDay(anchor)]
+      : view === "week"
+      ? [startOfWeek(anchor, { weekStartsOn: 1 }), endOfWeek(anchor, { weekStartsOn: 1 })]
+      : [startOfWeek(startOfMonth(anchor), { weekStartsOn: 1 }), endOfWeek(endOfMonth(anchor), { weekStartsOn: 1 })];
 
   // Fetch appointments + patients for this workspace in parallel
   const [rawAppointments, rawPatients, workspace] = await Promise.all([
     prisma.appointment.findMany({
       where: {
         workspaceId: userId,
-        startTime: { gte: weekStart, lte: weekEnd },
+        startTime: { gte: rangeStart, lte: rangeEnd },
       },
       include: {
         patient: { select: { firstName: true, lastName: true } },
@@ -81,26 +91,28 @@ export default async function CalendarPage({ searchParams }: CalendarPageProps) 
   }));
 
   const patients: PatientOption[] = rawPatients;
+  const activeCount = appointments.filter((a) => a.status !== "CANCELLED").length;
   const { t, tp } = await getI18n(userId);
 
   return (
     <>
       <Header title={t("nav.calendar")} />
       <main className="flex-1 p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold">{t("calendar.weekly")}</h2>
-            <p className="text-sm text-muted-foreground">{tp(appointments.length, "calendar.count")}</p>
-          </div>
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">
+            {tp(activeCount, `calendar.count.${view}`)}
+          </p>
           <BookAppointmentButton patients={patients} availability={availability} />
         </div>
 
-        <WeekCalendar
+        <CalendarView
+          key={`${view}-${anchorISO}`}
           appointments={appointments}
           patients={patients}
           availability={availability}
           cancellationNoticeHours={workspace?.cancellationNoticeHours ?? 48}
-          currentWeekISO={weekISO}
+          view={view}
+          anchorISO={anchorISO}
         />
       </main>
     </>

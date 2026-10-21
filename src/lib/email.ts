@@ -114,6 +114,35 @@ export async function sendInvoiceEmail(opts: {
   });
 }
 
+// ── Credit note ──────────────────────────────────────────────────────────────
+
+export async function sendCreditNoteEmail(opts: {
+  lang: Lang;
+  to: string;
+  patientName: string;
+  practiceName: string;
+  title: string;           // "Note de crédit" / "Avoir"
+  number: string;
+  cancelledNumber: string; // the invoice it cancels
+  publicUrl: string;
+}): Promise<SendStatus> {
+  const fr = opts.lang === "fr";
+  return deliver({
+    to: opts.to,
+    fromName: opts.practiceName,
+    subject: fr ? `${opts.title} ${opts.number}` : `Credit note ${opts.number}`,
+    html: fr
+      ? `<p>Bonjour ${e(opts.patientName)},</p>
+         <p>La facture <strong>${e(opts.cancelledNumber)}</strong> est annulée par le document <strong>${e(opts.title)} ${e(opts.number)}</strong>.</p>
+         ${button(opts.publicUrl, "Voir le document")}
+         <p>${e(opts.practiceName)}</p>`
+      : `<p>Dear ${e(opts.patientName)},</p>
+         <p>Invoice <strong>${e(opts.cancelledNumber)}</strong> is cancelled by credit note <strong>${e(opts.number)}</strong>.</p>
+         ${button(opts.publicUrl, "View the credit note")}
+         <p>${e(opts.practiceName)}</p>`,
+  });
+}
+
 // ── Overdue reminder (dunning) ───────────────────────────────────────────────
 
 export async function sendInvoiceReminder(opts: {
@@ -230,6 +259,103 @@ export async function sendSessionReminder(opts: {
          ${where}
          <p>If you can't make it, please let us know as soon as possible by replying to this email.</p>
          <p>${e(opts.practiceName)}</p>`,
+  });
+}
+
+// ── Portal bookings (patient confirmation, practitioner notice) ─────────────
+
+export type PortalChange = "booked" | "moved" | "cancelled";
+
+/** Confirms to the patient a session they booked, moved or cancelled from the portal. */
+export async function sendPortalConfirmation(opts: {
+  lang: Lang;
+  to: string;
+  patientName: string;
+  practiceName: string;
+  change: PortalChange;
+  when: string;
+  fee?: string | null; // late cancellation fee, formatted
+  address?: string | null;
+  replyTo?: string;
+}): Promise<SendStatus> {
+  const fr = opts.lang === "fr";
+  const where = opts.address && opts.change !== "cancelled" ? `<p>${e(opts.address).replace(/\n/g, "<br>")}</p>` : "";
+  const subject = {
+    booked: fr ? `Rendez-vous confirmé : ${opts.when}` : `Appointment confirmed: ${opts.when}`,
+    moved: fr ? `Rendez-vous déplacé : ${opts.when}` : `Appointment moved: ${opts.when}`,
+    cancelled: fr ? `Rendez-vous annulé : ${opts.when}` : `Appointment cancelled: ${opts.when}`,
+  }[opts.change];
+  const line = {
+    booked: fr ? `Votre rendez-vous du <strong>${e(opts.when)}</strong> est confirmé.` : `Your appointment on <strong>${e(opts.when)}</strong> is confirmed.`,
+    moved: fr ? `Votre rendez-vous est déplacé au <strong>${e(opts.when)}</strong>.` : `Your appointment is moved to <strong>${e(opts.when)}</strong>.`,
+    cancelled: fr ? `Votre rendez-vous du <strong>${e(opts.when)}</strong> est annulé.` : `Your appointment on <strong>${e(opts.when)}</strong> is cancelled.`,
+  }[opts.change];
+  const fee = opts.fee
+    ? `<p>${fr ? `Annulation tardive : des frais de ${e(opts.fee)} s'appliquent selon la politique d'annulation.` : `Late cancellation: a fee of ${e(opts.fee)} applies under the cancellation policy.`}</p>`
+    : "";
+  return deliver({
+    to: opts.to,
+    fromName: opts.practiceName,
+    replyTo: opts.replyTo,
+    subject,
+    html: `<p>${fr ? "Bonjour" : "Dear"} ${e(opts.patientName)},</p><p>${line}</p>${fee}${where}<p>${e(opts.practiceName)}</p>`,
+  });
+}
+
+/** Tells the practitioner a patient booked, moved or cancelled a session from the portal. */
+export async function sendPractitionerNotice(opts: {
+  lang: Lang;
+  to: string;
+  patientName: string;
+  change: PortalChange;
+  when: string;
+  previousWhen?: string;
+  fee?: string | null;
+  url: string;
+}): Promise<SendStatus> {
+  const fr = opts.lang === "fr";
+  const what = {
+    booked: fr ? `a réservé une séance le ${opts.when}` : `booked a session on ${opts.when}`,
+    moved: fr ? `a déplacé sa séance du ${opts.previousWhen} au ${opts.when}` : `moved their session from ${opts.previousWhen} to ${opts.when}`,
+    cancelled: fr ? `a annulé sa séance du ${opts.when}` : `cancelled their session on ${opts.when}`,
+  }[opts.change];
+  const fee = opts.fee
+    ? `<p>${fr ? `Annulation tardive : frais de ${e(opts.fee)} enregistrés (modifiables depuis le calendrier).` : `Late cancellation: a ${e(opts.fee)} fee was recorded (you can change it from the calendar).`}</p>`
+    : "";
+  return deliver({
+    to: opts.to,
+    subject: fr ? `Portail patient : ${opts.patientName} ${what}` : `Patient portal: ${opts.patientName} ${what}`,
+    html: `<p>${e(opts.patientName)} ${e(what)}.</p>${fee}${button(opts.url, fr ? "Ouvrir le calendrier" : "Open the calendar")}`,
+  });
+}
+
+// ── Form to fill in ──────────────────────────────────────────────────────────
+
+export async function sendFormRequestEmail(opts: {
+  lang: Lang;
+  to: string;
+  patientName: string;
+  practiceName: string;
+  formName: string;
+  signature: boolean; // the form asks for an electronic signature
+  url: string;
+  replyTo?: string;
+}): Promise<SendStatus> {
+  const fr = opts.lang === "fr";
+  return deliver({
+    to: opts.to,
+    fromName: opts.practiceName,
+    replyTo: opts.replyTo,
+    subject: fr ? `Formulaire à remplir : ${opts.formName}` : `Form to fill in: ${opts.formName}`,
+    html: fr
+      ? `<p>Bonjour ${e(opts.patientName)},</p>
+         <p>${e(opts.practiceName)} vous demande de remplir le formulaire <strong>${e(opts.formName)}</strong>${opts.signature ? " et de le signer électroniquement" : ""}.</p>
+         ${button(opts.url, "Remplir le formulaire")}
+         <p style="color:#71717a;font-size:12px;">Ce lien vous est personnel : ne le transférez pas.</p>`
+      : `<p>Dear ${e(opts.patientName)},</p>
+         <p>${e(opts.practiceName)} asks you to fill in the form <strong>${e(opts.formName)}</strong>${opts.signature ? " and sign it electronically" : ""}.</p>
+         ${button(opts.url, "Fill in the form")}
+         <p style="color:#71717a;font-size:12px;">This link is personal: please don't forward it.</p>`,
   });
 }
 

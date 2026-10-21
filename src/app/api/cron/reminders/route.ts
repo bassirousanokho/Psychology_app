@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { addDays, endOfDay, format, startOfDay } from "date-fns";
+import { addDays, endOfDay, startOfDay } from "date-fns";
 import prisma from "@/lib/prisma";
 import { sendSessionReminder } from "@/lib/email";
-import { dateLocaleOf, langOf } from "@/lib/format";
+import { formatWhen, langOf } from "@/lib/format";
 
 /**
  * Day-before session reminders. Cloud Scheduler calls this daily (see README);
@@ -45,11 +45,7 @@ export async function GET(request: Request) {
   let failed = 0;
   for (const a of appts) {
     const lang = langOf(a.workspace.language);
-    const locale = dateLocaleOf(lang, a.workspace.region);
-    const when =
-      lang === "fr"
-        ? format(a.startTime, "EEEE d MMMM 'à' H 'h' mm", { locale })
-        : format(a.startTime, "EEEE, MMMM d 'at' h:mm a", { locale });
+    const when = formatWhen(a.startTime, lang, a.workspace.region);
     try {
       const status = await sendSessionReminder({
         lang,

@@ -1,17 +1,21 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   addDays,
   addMinutes,
+  addMonths,
   addWeeks,
   differenceInMinutes,
+  endOfMonth,
+  endOfWeek,
   format,
   isSameDay,
+  isSameMonth,
   isToday,
+  startOfMonth,
   startOfWeek,
-  subWeeks,
 } from "date-fns";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
@@ -160,12 +164,15 @@ function AppointmentBlock({
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-interface WeekCalendarProps {
+export type CalendarViewMode = "day" | "week" | "month";
+
+interface CalendarViewProps {
   appointments: CalendarAppointment[];
   patients: PatientOption[];
   availability: Availability;
   cancellationNoticeHours: number;
-  currentWeekISO: string; // yyyy-MM-dd of the Monday
+  view: CalendarViewMode;
+  anchorISO: string; // yyyy-MM-dd of the day shown (any day of the week / month)
 }
 
 type DragState = { appt: CalendarAppointment; grabOffsetMin: number; durationMin: number };
@@ -174,21 +181,156 @@ type DropPreview = { dayKey: string; startMin: number; durationMin: number };
 // data no longer matches `from` (moved for real) or removed if the move fails
 type PendingMove = { from: string; startTime: string; endTime: string };
 
-export function WeekCalendar({
+const dateKey = (d: Date) => format(d, "yyyy-MM-dd");
+
+export function calendarHref(view: CalendarViewMode, date: Date) {
+  return `/dashboard/calendar?view=${view}&date=${dateKey(date)}`;
+}
+
+export function CalendarView({
   appointments,
   patients,
   availability,
   cancellationNoticeHours,
-  currentWeekISO,
-}: WeekCalendarProps) {
+  view,
+  anchorISO,
+}: CalendarViewProps) {
   const router = useRouter();
-  const { t, fmt, tError } = useI18n();
-  const weekStart = startOfWeek(new Date(currentWeekISO + "T00:00:00"), { weekStartsOn: 1 });
-  const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  const searchParams = useSearchParams();
+  const { t, fmt } = useI18n();
+  const anchor = new Date(anchorISO + "T00:00:00");
 
   const [bookingOpen, setBookingOpen] = useState(false);
   const [bookingStart, setBookingStart] = useState<Date | undefined>();
   const [selected, setSelected] = useState<CalendarAppointment | null>(null);
+
+  // Phones open on the day view unless a view was chosen
+  useEffect(() => {
+    if (!searchParams.get("view") && window.matchMedia("(max-width: 767px)").matches) {
+      router.replace(calendarHref("day", new Date()));
+    }
+  }, [router, searchParams]);
+
+  function go(next: CalendarViewMode, date: Date) {
+    router.push(calendarHref(next, date));
+  }
+
+  function step(dir: 1 | -1) {
+    const next = view === "day" ? addDays(anchor, dir) : view === "week" ? addWeeks(anchor, dir) : addMonths(anchor, dir);
+    go(view, next);
+  }
+
+  const weekStart = startOfWeek(anchor, { weekStartsOn: 1 });
+  const title =
+    view === "day"
+      ? fmt(anchor, "EEEE d MMMM yyyy")
+      : view === "week"
+      ? `${fmt(weekStart, "d MMM")} – ${fmt(addDays(weekStart, 6), "d MMM yyyy")}`
+      : fmt(anchor, "MMMM yyyy");
+
+  function openBooking(start?: Date) {
+    setBookingStart(start);
+    setBookingOpen(true);
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* ── Toolbar ── */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Button variant="outline" size="icon" onClick={() => step(-1)} aria-label={t("calendar.previous")}>
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => go(view, new Date())}>
+          {t("calendar.today")}
+        </Button>
+        <Button variant="outline" size="icon" onClick={() => step(1)} aria-label={t("calendar.next")}>
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+        <span className="ml-1 text-sm font-medium first-letter:uppercase">{title}</span>
+
+        <div className="ml-auto flex rounded-lg border p-0.5" role="tablist">
+          {(["day", "week", "month"] as const).map((v) => (
+            <button
+              key={v}
+              type="button"
+              role="tab"
+              aria-selected={view === v}
+              onClick={() => go(v, anchor)}
+              className={cn(
+                "rounded-md px-3 py-1 text-xs font-medium transition-colors",
+                view === v ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
+              )}
+            >
+              {t(`calendar.view.${v}`)}
+            </button>
+          ))}
+        </div>
+        <span className="hidden w-full items-center gap-3 text-xs text-muted-foreground lg:flex lg:w-auto">
+          <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-blue-400" />{t("type.PSYCHOTHERAPY")}</span>
+          <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-violet-400" />{t("typeShort.ADMIN")}</span>
+          <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-amber-400" />{t("typeShort.WRITING")}</span>
+        </span>
+      </div>
+
+      {view === "month" ? (
+        <MonthGrid
+          anchor={anchor}
+          appointments={appointments}
+          onSelect={setSelected}
+          onOpenDay={(d) => go("day", d)}
+        />
+      ) : (
+        <TimeGrid
+          days={view === "day" ? [anchor] : Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))}
+          appointments={appointments}
+          availability={availability}
+          onSelect={setSelected}
+          onSlotClick={openBooking}
+          onOpenDay={view === "week" ? (d) => go("day", d) : undefined}
+        />
+      )}
+
+      {/* Manage an existing session */}
+      <AppointmentDialog
+        appointment={selected}
+        availability={availability}
+        cancellationNoticeHours={cancellationNoticeHours}
+        onOpenChange={(o) => !o && setSelected(null)}
+      />
+
+      {/* Booking dialog */}
+      <BookingDialog
+        patients={patients}
+        availability={availability}
+        initialStart={bookingStart}
+        open={bookingOpen}
+        onOpenChange={(o) => {
+          setBookingOpen(o);
+          if (!o) setBookingStart(undefined);
+        }}
+      />
+    </div>
+  );
+}
+
+// ── Day / week time grid (drag and drop to move) ─────────────────────────────
+
+function TimeGrid({
+  days,
+  appointments,
+  availability,
+  onSelect,
+  onSlotClick,
+  onOpenDay,
+}: {
+  days: Date[];
+  appointments: CalendarAppointment[];
+  availability: Availability;
+  onSelect: (appt: CalendarAppointment) => void;
+  onSlotClick: (start: Date) => void;
+  onOpenDay?: (day: Date) => void;
+}) {
+  const { t, fmt, tError } = useI18n();
   const [drag, setDrag] = useState<DragState | null>(null);
   const [preview, setPreview] = useState<DropPreview | null>(null);
   const [pendingMoves, setPendingMoves] = useState<Record<string, PendingMove>>({});
@@ -205,17 +347,12 @@ export function WeekCalendar({
   );
   const totalHours = dayEndHour - dayStartHour;
   const gridHeight = totalHours * SLOT_HEIGHT;
-
-  function navigate(dir: "prev" | "next") {
-    const newWeek = dir === "next" ? addWeeks(weekStart, 1) : subWeeks(weekStart, 1);
-    router.push(`/dashboard/calendar?week=${format(newWeek, "yyyy-MM-dd")}`);
-  }
+  const columns = `3.5rem repeat(${days.length}, minmax(0, 1fr))`;
 
   function handleSlotClick(day: Date, slotHour: number) {
     const start = new Date(day);
     start.setHours(slotHour, 0, 0, 0);
-    setBookingStart(start);
-    setBookingOpen(true);
+    onSlotClick(start);
   }
 
   // ── Drag and drop ──
@@ -232,9 +369,9 @@ export function WeekCalendar({
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
     const startMin = dropStartMin(e, drag);
-    const dayKey = format(day, "yyyy-MM-dd");
-    if (preview?.dayKey !== dayKey || preview.startMin !== startMin) {
-      setPreview({ dayKey, startMin, durationMin: drag.durationMin });
+    const key = dateKey(day);
+    if (preview?.dayKey !== key || preview.startMin !== startMin) {
+      setPreview({ dayKey: key, startMin, durationMin: drag.durationMin });
     }
   }
 
@@ -275,53 +412,25 @@ export function WeekCalendar({
   );
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* ── Toolbar ── */}
-      <div className="flex flex-wrap items-center gap-3">
-        <Button variant="outline" size="icon" onClick={() => navigate("prev")}>
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() =>
-            router.push(
-              `/dashboard/calendar?week=${format(
-                startOfWeek(new Date(), { weekStartsOn: 1 }),
-                "yyyy-MM-dd",
-              )}`,
-            )
-          }
-        >
-          {t("calendar.today")}
-        </Button>
-        <Button variant="outline" size="icon" onClick={() => navigate("next")}>
-          <ChevronRight className="h-4 w-4" />
-        </Button>
-        <span className="ml-2 text-sm font-medium">
-          {fmt(weekStart, "MMMM yyyy")}
-        </span>
-        <span className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
-          <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-blue-400" />{t("type.PSYCHOTHERAPY")}</span>
-          <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-violet-400" />{t("typeShort.ADMIN")}</span>
-          <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-amber-400" />{t("typeShort.WRITING")}</span>
-        </span>
-      </div>
-
-      {/* ── Calendar grid ── */}
-      <div className="rounded-xl border bg-card overflow-hidden">
+    <div className="rounded-xl border bg-card overflow-x-auto">
+      {/* A week stays readable on a phone: scroll sideways */}
+      <div className={days.length > 1 ? "min-w-[720px]" : undefined}>
         {/* Day header row */}
-        <div className="grid border-b" style={{ gridTemplateColumns: "3.5rem repeat(7, 1fr)" }}>
+        <div className="grid border-b" style={{ gridTemplateColumns: columns }}>
           <div className="border-r" /> {/* time gutter */}
           {days.map((day) => (
-            <div
+            <button
               key={day.toISOString()}
+              type="button"
+              disabled={!onOpenDay}
+              onClick={() => onOpenDay?.(day)}
               className={cn(
                 "py-2 text-center border-r last:border-r-0",
+                onOpenDay && "hover:bg-muted/40",
                 isToday(day) && "bg-primary/5",
               )}
             >
-              <p className="text-xs text-muted-foreground">{fmt(day, "EEE")}</p>
+              <p className="text-xs text-muted-foreground">{fmt(day, days.length > 1 ? "EEE" : "EEEE")}</p>
               <p
                 className={cn(
                   "text-sm font-semibold",
@@ -331,7 +440,7 @@ export function WeekCalendar({
               >
                 {format(day, "d")}
               </p>
-            </div>
+            </button>
           ))}
         </div>
 
@@ -340,7 +449,7 @@ export function WeekCalendar({
           <div
             className="grid relative"
             style={{
-              gridTemplateColumns: "3.5rem repeat(7, 1fr)",
+              gridTemplateColumns: columns,
               height: gridHeight + SLOT_HEIGHT,
             }}
           >
@@ -359,10 +468,10 @@ export function WeekCalendar({
 
             {/* Day columns */}
             {days.map((day) => {
-              const dayKey = format(day, "yyyy-MM-dd");
+              const key = dateKey(day);
               const dayAppts = shown.filter((a) => isSameDay(new Date(a.startTime), day));
               const lanes = layoutLanes(dayAppts);
-              const dayPreview = preview?.dayKey === dayKey ? preview : null;
+              const dayPreview = preview?.dayKey === key ? preview : null;
 
               return (
                 <div
@@ -396,7 +505,7 @@ export function WeekCalendar({
                         lanes={laneCount}
                         dayStartHour={dayStartHour}
                         totalHours={totalHours}
-                        onSelect={setSelected}
+                        onSelect={onSelect}
                         onDragEnd={() => {
                           setDrag(null);
                           setPreview(null);
@@ -421,7 +530,7 @@ export function WeekCalendar({
                         height: Math.max((dayPreview.durationMin / 60) * SLOT_HEIGHT, 24),
                       }}
                     >
-                      {format(addMinutes(new Date(`${dayKey}T00:00:00`), dayStartHour * 60 + dayPreview.startMin), "HH:mm")}
+                      {format(addMinutes(new Date(`${key}T00:00:00`), dayStartHour * 60 + dayPreview.startMin), "HH:mm")}
                     </div>
                   )}
                 </div>
@@ -430,26 +539,112 @@ export function WeekCalendar({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
 
-      {/* Manage an existing session */}
-      <AppointmentDialog
-        appointment={selected}
-        availability={availability}
-        cancellationNoticeHours={cancellationNoticeHours}
-        onOpenChange={(o) => !o && setSelected(null)}
-      />
+// ── Month grid ────────────────────────────────────────────────────────────────
 
-      {/* Booking dialog */}
-      <BookingDialog
-        patients={patients}
-        availability={availability}
-        initialStart={bookingStart}
-        open={bookingOpen}
-        onOpenChange={(o) => {
-          setBookingOpen(o);
-          if (!o) setBookingStart(undefined);
-        }}
-      />
+const MONTH_CHIPS = 3;
+
+function MonthGrid({
+  anchor,
+  appointments,
+  onSelect,
+  onOpenDay,
+}: {
+  anchor: Date;
+  appointments: CalendarAppointment[];
+  onSelect: (appt: CalendarAppointment) => void;
+  onOpenDay: (day: Date) => void;
+}) {
+  const { t, tp, fmt } = useI18n();
+  const first = startOfWeek(startOfMonth(anchor), { weekStartsOn: 1 });
+  const last = endOfWeek(endOfMonth(anchor), { weekStartsOn: 1 });
+  const days: Date[] = [];
+  for (let d = first; d <= last; d = addDays(d, 1)) days.push(d);
+
+  const byDay = new Map<string, CalendarAppointment[]>();
+  for (const a of appointments) {
+    const key = dateKey(new Date(a.startTime));
+    byDay.set(key, [...(byDay.get(key) ?? []), a]);
+  }
+
+  return (
+    <div className="rounded-xl border bg-card overflow-hidden">
+      <div className="grid grid-cols-7 border-b">
+        {days.slice(0, 7).map((d) => (
+          <p key={d.toISOString()} className="py-2 text-center text-xs text-muted-foreground">
+            {fmt(d, "EEE")}
+          </p>
+        ))}
+      </div>
+      <div className="grid grid-cols-7">
+        {days.map((day) => {
+          const items = (byDay.get(dateKey(day)) ?? []).sort((a, b) => a.startTime.localeCompare(b.startTime));
+          const active = items.filter((a) => a.status !== "CANCELLED");
+          const outside = !isSameMonth(day, anchor);
+          return (
+            <div
+              key={day.toISOString()}
+              className={cn(
+                "min-h-24 border-b border-r p-1 [&:nth-child(7n)]:border-r-0",
+                outside && "bg-muted/30",
+                isToday(day) && "bg-primary/5",
+              )}
+            >
+              <button
+                type="button"
+                onClick={() => onOpenDay(day)}
+                className={cn(
+                  "mb-1 flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-xs font-medium hover:bg-muted",
+                  outside && "text-muted-foreground",
+                  isToday(day) && "bg-primary text-primary-foreground hover:bg-primary/90",
+                )}
+                title={tp(active.length, "calendar.dayCount")}
+              >
+                {format(day, "d")}
+              </button>
+              {/* Phones: a count only; larger screens: the first sessions */}
+              {active.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => onOpenDay(day)}
+                  className="w-full rounded bg-blue-100 px-1 text-[10px] font-medium text-blue-900 sm:hidden dark:bg-blue-950 dark:text-blue-200"
+                >
+                  {active.length}
+                </button>
+              )}
+              <div className="hidden space-y-0.5 sm:block">
+                {items.slice(0, MONTH_CHIPS).map((a) => (
+                  <button
+                    key={a.id}
+                    type="button"
+                    onClick={() => onSelect(a)}
+                    className={cn(
+                      "block w-full truncate rounded border-l-2 px-1 py-0.5 text-left text-[11px] leading-tight hover:opacity-90",
+                      blockStyle(a),
+                      (a.status === "CANCELLED" || a.status === "NO_SHOW") && "line-through",
+                    )}
+                    title={`${a.patient.lastName}, ${a.patient.firstName} — ${fmt(a.startTime, "HH:mm")}`}
+                  >
+                    <span className="tabular-nums">{fmt(a.startTime, "HH:mm")}</span> {a.patient.lastName}
+                  </button>
+                ))}
+                {items.length > MONTH_CHIPS && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenDay(day)}
+                    className="px-1 text-[11px] text-muted-foreground hover:underline"
+                  >
+                    {t("calendar.more", { count: items.length - MONTH_CHIPS })}
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

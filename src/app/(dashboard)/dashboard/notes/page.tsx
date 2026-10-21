@@ -134,6 +134,7 @@ export default async function NotesPage({ searchParams }: { searchParams: Promis
       <main className="flex-1 p-6">
         <div className="mx-auto max-w-5xl space-y-4">
           {/* Tabs */}
+          <div className="flex flex-wrap items-center justify-between gap-2">
           <nav className="flex flex-wrap gap-1">
             {(Object.keys(TABS) as Tab[]).map((tb) => (
               <Link
@@ -148,6 +149,10 @@ export default async function NotesPage({ searchParams }: { searchParams: Promis
               </Link>
             ))}
           </nav>
+            <Button variant="outline" size="sm" render={<Link href="/dashboard/notes/templates" />}>
+              {t("noteTemplates.title")}
+            </Button>
+          </div>
 
           {/* Filters */}
           <form method="get" className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4">

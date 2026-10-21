@@ -119,6 +119,7 @@ export default async function DashboardPage() {
       prisma.invoice.aggregate({
         where: {
           workspaceId: userId,
+          kind: "INVOICE",
           status: { in: ["DRAFT", "SENT", "OVERDUE"] },
         },
         _sum: { totalAmount: true },
@@ -126,7 +127,7 @@ export default async function DashboardPage() {
       prisma.invoice.aggregate({
         where: {
           workspaceId: userId,
-          status: "PAID",
+          // Paid invoices less refunds (credit notes of paid invoices)
           paidAt: { gte: monthStart, lte: monthEnd },
         },
         _sum: { totalAmount: true },

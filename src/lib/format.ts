@@ -28,3 +28,11 @@ export function formatMoney(amount: number, currency: string, locale: string): s
 export function formatLongDate(date: Date, lang: Lang, region: string | null | undefined): string {
   return formatDate(date, lang === "en" ? "MMMM d, yyyy" : "d MMMM yyyy", { locale: dateLocaleOf(lang, region) });
 }
+
+/** Session date and time for emails, e.g. "mardi 21 octobre à 14 h 00" / "Tuesday, October 21 at 2:00 PM". */
+export function formatWhen(date: Date, lang: Lang, region: string | null | undefined): string {
+  const locale = dateLocaleOf(lang, region);
+  return lang === "fr"
+    ? formatDate(date, "EEEE d MMMM 'à' H 'h' mm", { locale })
+    : formatDate(date, "EEEE, MMMM d 'at' h:mm a", { locale });
+}

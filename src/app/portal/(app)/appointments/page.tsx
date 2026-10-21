@@ -6,6 +6,7 @@ import { portalI18n } from "@/i18n/server";
 import prisma from "@/lib/prisma";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { PortalAppointmentActions } from "@/components/portal/appointment-actions";
 
 const STATUS_VARIANTS = {
   SCHEDULED: "secondary",
@@ -31,13 +32,18 @@ export default async function PortalAppointmentsPage() {
       status: true,
       type: true,
       tariffAmount: true,
+      cancellationFee: true,
+      invoiceId: true,
       invoice: { select: { publicToken: true, status: true } },
     },
   });
+  const ws = session.workspace;
+  const now = new Date().getTime();
+  const noticeMs = ws.cancellationNoticeHours * 3_600_000;
 
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">{t("portal.appointments")}</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
@@ -49,6 +55,12 @@ export default async function PortalAppointmentsPage() {
           {t("portal.bookSession")}
         </Button>
       </div>
+
+      {ws.patientSelfServiceEnabled && (
+        <p className="text-xs text-muted-foreground">
+          {t("portal.policy", { hours: ws.cancellationNoticeHours })}
+        </p>
+      )}
 
       <div className="rounded-xl border bg-card">
         {appointments.length === 0 ? (
@@ -73,10 +85,25 @@ export default async function PortalAppointmentsPage() {
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {fmt(appt.startTime, "HH:mm")} – {fmt(appt.endTime, "HH:mm")} ·{" "}
-                    {money(Number(appt.tariffAmount), session.workspace.currency)}
+                    {money(Number(appt.tariffAmount), ws.currency)}
+                    {appt.status === "CANCELLED" && appt.cancellationFee &&
+                      ` · ${t("portal.feeCharged", { amount: money(Number(appt.cancellationFee), ws.currency) })}`}
                   </p>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex flex-wrap items-center justify-end gap-1 shrink-0">
+                  {ws.patientSelfServiceEnabled &&
+                    appt.status === "SCHEDULED" &&
+                    appt.type === "PSYCHOTHERAPY" &&
+                    !appt.invoiceId &&
+                    appt.startTime.getTime() > now && (
+                      <PortalAppointmentActions
+                        id={appt.id}
+                        startTime={appt.startTime.toISOString()}
+                        noticeHours={ws.cancellationNoticeHours}
+                        price={money(Number(appt.tariffAmount), ws.currency)}
+                        canMove={appt.startTime.getTime() - now >= noticeMs}
+                      />
+                    )}
                   <Badge variant={STATUS_VARIANTS[appt.status]}>
                     {t(`status.${appt.status}`)}
                   </Badge>

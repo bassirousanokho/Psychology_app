@@ -1,13 +1,24 @@
 
+import Link from "next/link";
+import prisma from "@/lib/prisma";
 import { requirePatientAuth } from "@/lib/patient-auth";
 import { portalI18n } from "@/i18n/server";
 import { getBusyRanges } from "@/app/portal/actions";
 import { BookingSlots } from "@/components/portal/booking-slots";
 
-export default async function BookPage() {
+export default async function BookPage({ searchParams }: { searchParams: Promise<{ reschedule?: string }> }) {
   const session = await requirePatientAuth();
   const { t, fmt } = portalI18n(session.workspace);
   const { workspace, workspaceId } = session;
+
+  // Moving an existing session: it must still be theirs and scheduled
+  const { reschedule } = await searchParams;
+  const moving = reschedule
+    ? await prisma.appointment.findFirst({
+        where: { id: reschedule, workspaceId, patientId: session.patientId, status: "SCHEDULED", startTime: { gt: new Date() } },
+        select: { id: true, startTime: true },
+      })
+    : null;
 
   // Pre-fetch busy ranges for the next 14 working days
   // so the client component never needs to make extra round-trips
@@ -24,23 +35,33 @@ export default async function BookPage() {
     cursor.setDate(cursor.getDate() + 1);
   }
   const busyByDate: Record<string, [number, number][]> = Object.fromEntries(
-    await Promise.all(dates.map(async (d) => [d, await getBusyRanges(workspaceId, d)] as const)),
+    await Promise.all(dates.map(async (d) => [d, await getBusyRanges(workspaceId, d, moving?.id)] as const)),
   );
 
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-4">
       <div>
-        <h1 className="text-2xl font-bold">{t("portal.bookTitle")}</h1>
+        <h1 className="text-2xl font-bold">{moving ? t("portal.moveTitle") : t("portal.bookTitle")}</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
           {t("portal.bookHint")}
         </p>
       </div>
+
+      {moving && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-muted/40 px-4 py-3 text-sm">
+          <span>{t("portal.moving", { date: fmt(moving.startTime, "EEEE d MMMM, HH:mm") })}</span>
+          <Link href="/portal/appointments" className="text-muted-foreground underline underline-offset-2">
+            {t("common.cancel")}
+          </Link>
+        </div>
+      )}
 
       <BookingSlots
         workingDays={workspace.workingDays}
         workingHoursStart={workspace.workingHoursStart}
         workingHoursEnd={workspace.workingHoursEnd}
         busyByDate={busyByDate}
+        rescheduleId={moving?.id}
       />
     </div>
   );

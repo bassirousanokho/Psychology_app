@@ -16,7 +16,7 @@ export async function GET(request: Request) {
 
   // 1. Mark overdue: SENT invoices whose dueDate has passed
   const marked = await prisma.invoice.updateMany({
-    where: { status: "SENT", dueDate: { lt: now } },
+    where: { kind: "INVOICE", status: "SENT", dueDate: { lt: now } },
     data: { status: "OVERDUE" },
   });
 
@@ -25,6 +25,7 @@ export async function GET(request: Request) {
 
   const overdue = await prisma.invoice.findMany({
     where: {
+      kind: "INVOICE",
       status: "OVERDUE",
       patient: { deletedAt: null },
       OR: [{ reminderSentAt: null }, { reminderSentAt: { lt: sevenDaysAgo } }],

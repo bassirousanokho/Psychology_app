@@ -23,6 +23,10 @@ export type PatientSession = {
     workingHoursEnd: string;
     language: string;
     region: string;
+    address: string | null;
+    practitionerName: string | null;
+    cancellationNoticeHours: number;
+    patientSelfServiceEnabled: boolean;
   };
 };
 
@@ -56,6 +60,10 @@ export async function requirePatientAuth(): Promise<PatientSession> {
           workingHoursEnd: true,
           language: true,
           region: true,
+          address: true,
+          practitionerName: true,
+          cancellationNoticeHours: true,
+          patientSelfServiceEnabled: true,
         },
       },
     },

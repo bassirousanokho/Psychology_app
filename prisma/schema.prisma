@@ -34,6 +34,12 @@ enum InvoiceStatus {
   SENT
   PAID
   OVERDUE
+  CANCELLED // replaced by a credit note (or a draft withdrawn before it was sent)
+}
+
+enum InvoiceKind {
+  INVOICE
+  CREDIT_NOTE // cancels an invoice; amounts are negative
 }
 
 // ---------------------------------------------------------------------------
@@ -76,6 +82,10 @@ model Workspace {
   // Data retention reminders: inactive patients, and patients in Recently deleted
   retentionYears Int @default(5)
 
+  // Patients may cancel or move their own sessions from the portal. Within the
+  // cancellation notice period the session price is charged as a fee by default.
+  patientSelfServiceEnabled Boolean @default(true)
+
   // Legal mentions printed on invoices and receipts (French "note d'honoraires")
   practitionerName  String? // as printed; defaults to the workspace name
   professionalTitle String? @default("Psychologue")
@@ -115,6 +125,9 @@ model Workspace {
   rateChanges    PatientRateChange[]
   messages       Message[]
   statements     Statement[]
+  noteTemplates  NoteTemplate[]
+  formTemplates  FormTemplate[]
+  formRequests   FormRequest[]
 }
 
 // ---------------------------------------------------------------------------
@@ -199,6 +212,7 @@ model Patient {
   rateChanges  PatientRateChange[]
   messages     Message[]
   statements   Statement[]
+  formRequests FormRequest[]
 
   @@index([workspaceId])
   @@index([workspaceId, lastName])
@@ -240,13 +254,21 @@ model Appointment {
   // Day-before reminder email to the patient
   reminderSentAt DateTime?
 
+  // Cancelled or moved by the patient from the portal
+  changedByPatientAt DateTime?
+
+  // The invoice billing this session (one invoice may bill several sessions).
+  // Cleared when that invoice is cancelled, so the session can be billed again.
+  invoiceId String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  workspace    Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  patient      Patient    @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  practitioner User       @relation("PractitionerAppointments", fields: [practitionerId], references: [id])
-  invoice      Invoice?
+  workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  patient      Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  practitioner User          @relation("PractitionerAppointments", fields: [practitionerId], references: [id])
+  invoice      Invoice?      @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  invoiceLines InvoiceLine[]
   documents    Document[]
 
   @@index([workspaceId])
@@ -254,6 +276,7 @@ model Appointment {
   @@index([seriesId])
   @@index([patientId])
   @@index([practitionerId])
+  @@index([invoiceId])
 }
 
 // ---------------------------------------------------------------------------
@@ -344,15 +367,16 @@ model AuditLog {
 // ---------------------------------------------------------------------------
 
 model Invoice {
-  id            String  @id @default(cuid())
-  workspaceId   String
-  patientId     String
-  appointmentId String? @unique // one-to-one with Appointment
+  id          String      @id @default(cuid())
+  workspaceId String
+  patientId   String
+  kind        InvoiceKind @default(INVOICE)
 
-  invoiceNumber String // sequential per workspace and year: INV-2026-0001
+  invoiceNumber String // sequential per workspace and year: INV-2026-0001 (credit notes: NC-/AV-2026-0001)
+  // Totals of the lines (negative on a credit note)
   amount        Decimal @db.Decimal(10, 2)
   taxAmount     Decimal @db.Decimal(10, 2)
-  taxRate       Decimal @db.Decimal(6, 3)
+  taxRate       Decimal @db.Decimal(6, 3) // rate of the lines when they share one, else 0
   // Separate tax lines when the region has several taxes (Québec: TPS + TVQ):
   // [{ label: "TPS", rate: 5, amount: 6.5 }, …]. Null = a single tax line.
   taxLines      Json?
@@ -364,21 +388,50 @@ model Invoice {
   dueDate DateTime
 
   sentAt         DateTime? // emailed to the patient (status SENT)
-  paidAt         DateTime?
+  paidAt         DateTime? // credit note: the amount was refunded
   receiptSentAt  DateTime? // last time the receipt (quittance) was emailed
   reminderSentAt DateTime? // last dunning reminder timestamp
+
+  // Cancellation (status CANCELLED). Sent or paid invoices are cancelled by a credit note.
+  cancelledAt  DateTime?
+  cancelReason String?
+  // Credit note → the invoice it cancels
+  creditedInvoiceId String? @unique
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  patient     Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  appointment Appointment? @relation(fields: [appointmentId], references: [id])
+  workspace       Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  patient         Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  lines           InvoiceLine[]
+  appointments    Appointment[]
+  creditedInvoice Invoice?      @relation("CreditNote", fields: [creditedInvoiceId], references: [id])
+  creditNote      Invoice?      @relation("CreditNote")
 
   @@unique([workspaceId, invoiceNumber])
   @@index([workspaceId])
   @@index([workspaceId, status])
   @@index([patientId])
+}
+
+// One line of an invoice: a session, a fee or any service, with an optional discount.
+model InvoiceLine {
+  id              String  @id @default(cuid())
+  invoiceId       String
+  appointmentId   String? // the session billed by this line, if any (kept after cancellation)
+  position        Int
+  description     String
+  quantity        Decimal @default(1) @db.Decimal(10, 2) // hours for hourly work
+  unitPrice       Decimal @db.Decimal(10, 2)
+  discountPercent Decimal @default(0) @db.Decimal(5, 2)
+  taxRate         Decimal @default(0) @db.Decimal(6, 3)
+  amount          Decimal @db.Decimal(10, 2) // quantity × unit price − discount, before tax
+
+  invoice     Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+
+  @@index([invoiceId])
+  @@index([appointmentId])
 }
 
 // A patient's psychotherapy rate from a given date, with a reminder until the
@@ -443,4 +496,89 @@ model Message {
 
   @@index([patientId, createdAt])
   @@index([workspaceId])
+}
+
+// ---------------------------------------------------------------------------
+// Note templates
+// ---------------------------------------------------------------------------
+
+// Reusable text inserted into session notes (SOAP, DAP, intake assessment…)
+model NoteTemplate {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  body        String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+// ---------------------------------------------------------------------------
+// Forms (intake, consent, questionnaires)
+// ---------------------------------------------------------------------------
+
+enum FormKind {
+  INTAKE
+  CONSENT
+  QUESTIONNAIRE
+}
+
+enum FormRequestStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+}
+
+// A form the practice sends to patients. Fields: [{ id, type, label, … }] (src/lib/forms.ts)
+model FormTemplate {
+  id                String    @id @default(cuid())
+  workspaceId       String
+  name              String
+  kind              FormKind
+  description       String?
+  fields            Json
+  requiresSignature Boolean   @default(false)
+  archivedAt        DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  requests  FormRequest[]
+
+  @@index([workspaceId])
+}
+
+// A form sent to one patient: a copy of the template as sent, then the answers.
+// Answers may hold clinical information, so they're stored encrypted (enc:…).
+model FormRequest {
+  id                String            @id @default(cuid())
+  workspaceId       String
+  patientId         String
+  templateId        String?
+  name              String
+  kind              FormKind
+  description       String?
+  fields            Json
+  requiresSignature Boolean
+  token             String            @unique @default(uuid()) // link emailed to the patient
+  status            FormRequestStatus @default(PENDING)
+  answers           String? // encrypted JSON { fieldId: value }
+  // Electronic signature: typed full name, with when and from where it was signed
+  signatureName     String?
+  signedAt          DateTime?
+  signerIp          String?
+  signerUserAgent   String?
+  sentAt            DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime          @default(now())
+
+  workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  patient   Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  template  FormTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@index([patientId])
 }

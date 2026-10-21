@@ -20,7 +20,8 @@ export type InvoiceRow = {
   invoiceNumber: string;
   patientName: string;
   totalAmount: number;
-  status: "DRAFT" | "SENT" | "PAID" | "OVERDUE";
+  kind: "INVOICE" | "CREDIT_NOTE";
+  status: "DRAFT" | "SENT" | "PAID" | "OVERDUE" | "CANCELLED";
   dueDate: string;
   sentAt: string | null;
   paidAt: string | null;
@@ -36,15 +37,17 @@ const STATUS_VARIANTS: Record<
   SENT: "outline",
   PAID: "default",
   OVERDUE: "destructive",
+  CANCELLED: "outline",
 };
 
 interface BillingTableProps {
   rows: InvoiceRow[];
   currency: string;
   locale: string;
+  creditNoteLabel: string;
 }
 
-export function BillingTable({ rows, currency, locale }: BillingTableProps) {
+export function BillingTable({ rows, currency, locale, creditNoteLabel }: BillingTableProps) {
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const { t, fmt, tError } = useI18n();
 
@@ -82,16 +85,27 @@ export function BillingTable({ rows, currency, locale }: BillingTableProps) {
           {rows.map((row) => {
             const busy = loadingId === row.id;
             const spinner = <Loader2 className="h-3.5 w-3.5 animate-spin" />;
+            const invoice = row.kind === "INVOICE";
+            const unpaid = invoice && (row.status === "DRAFT" || row.status === "SENT" || row.status === "OVERDUE");
+            const paid = invoice && row.status === "PAID";
             return (
               <tr key={row.id} className="hover:bg-muted/40 transition-colors">
-                <td className="px-5 py-3 font-medium tabular-nums">{row.invoiceNumber}</td>
+                <td className="px-5 py-3 font-medium tabular-nums">
+                  <Link href={`/dashboard/billing/${row.id}`} className="hover:underline">
+                    {row.invoiceNumber}
+                  </Link>
+                </td>
                 <td className="px-5 py-3">{row.patientName}</td>
                 <td className="px-5 py-3 tabular-nums">{formatMoney(row.totalAmount, currency, locale)}</td>
                 <td className="px-5 py-3 text-muted-foreground">
                   {fmt(row.dueDate, "d MMM yyyy")}
                 </td>
                 <td className="px-5 py-3">
-                  <Badge variant={STATUS_VARIANTS[row.status]}>{t(`invoiceStatus.${row.status}`)}</Badge>
+                  {invoice ? (
+                    <Badge variant={STATUS_VARIANTS[row.status]}>{t(`invoiceStatus.${row.status}`)}</Badge>
+                  ) : (
+                    <Badge variant="secondary">{creditNoteLabel}</Badge>
+                  )}
                 </td>
                 <td className="px-5 py-3">
                   <div className="flex items-center justify-end gap-1.5">
@@ -106,7 +120,7 @@ export function BillingTable({ rows, currency, locale }: BillingTableProps) {
                     </Button>
 
                     {/* Email the invoice (unpaid) */}
-                    {row.status !== "PAID" && (
+                    {unpaid && (
                       <Button
                         variant="outline"
                         size="sm"
@@ -121,7 +135,7 @@ export function BillingTable({ rows, currency, locale }: BillingTableProps) {
                     )}
 
                     {/* Mark as Paid (any unpaid invoice: payment is due at the session) */}
-                    {row.status !== "PAID" && (
+                    {unpaid && (
                       <Button
                         variant="outline"
                         size="sm"
@@ -135,7 +149,7 @@ export function BillingTable({ rows, currency, locale }: BillingTableProps) {
                     )}
 
                     {/* Receipt (quittance) for paid invoices */}
-                    {row.status === "PAID" && (
+                    {paid && (
                       <Button
                         variant="outline"
                         size="sm"
@@ -150,7 +164,7 @@ export function BillingTable({ rows, currency, locale }: BillingTableProps) {
                     )}
 
                     {/* Undo "paid" clicked by mistake */}
-                    {row.status === "PAID" && (
+                    {paid && (
                       <Button
                         variant="ghost"
                         size="sm"

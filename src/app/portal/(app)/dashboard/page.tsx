@@ -16,11 +16,11 @@ const STATUS_VARIANTS = {
 
 export default async function PortalDashboardPage() {
   const session = await requirePatientAuth();
-  const { t, fmt } = portalI18n(session.workspace);
+  const { t, tp, fmt } = portalI18n(session.workspace);
 
   const now = new Date();
 
-  const [upcoming, recentDocRows] = await Promise.all([
+  const [upcoming, recentDocRows, pendingForms] = await Promise.all([
     prisma.appointment.findMany({
       where: {
         workspaceId: session.workspaceId,
@@ -40,6 +40,9 @@ export default async function PortalDashboardPage() {
       orderBy: { createdAt: "desc" },
       take: 3,
     }),
+    prisma.formRequest.count({
+      where: { workspaceId: session.workspaceId, patientId: session.patientId, status: "PENDING" },
+    }),
   ]);
 
   // Opened through /api/documents/[id], which signs a fresh URL on each click
@@ -56,6 +59,16 @@ export default async function PortalDashboardPage() {
           {t("portal.welcome", { practice: session.workspace.name })}
         </p>
       </div>
+
+      {pendingForms > 0 && (
+        <Link
+          href="/portal/forms"
+          className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-900 hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200"
+        >
+          <span>{tp(pendingForms, "portal.formsWaiting")}</span>
+          <span className="font-medium underline underline-offset-2">{t("portal.fillIn")}</span>
+        </Link>
+      )}
 
       {/* Upcoming appointments */}
       <div className="rounded-xl border bg-card">

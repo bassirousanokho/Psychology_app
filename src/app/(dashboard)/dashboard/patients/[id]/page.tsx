@@ -2,7 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { differenceInYears } from "date-fns";
-import { AlertTriangle, ArrowLeft, Cake, CalendarDays, Mail, MapPin, Phone, UserRound } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Cake, CalendarDays, Download, FilePlus2, Mail, MapPin, Phone, UserRound } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import prisma from "@/lib/prisma";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,7 @@ import { formatMoney, localeOf } from "@/lib/format";
 import { RateCard } from "@/components/patients/rate-card";
 import { PatientMessages } from "@/components/patients/patient-messages";
 import { StatementCard } from "@/components/patients/statement-card";
+import { PatientForms } from "@/components/patients/patient-forms";
 import { decrypt } from "@/lib/crypto";
 
 interface PageProps {
@@ -62,11 +63,18 @@ export default async function PatientProfilePage({ params }: PageProps) {
         orderBy: { createdAt: "desc" },
       },
       portalUser: { select: { id: true } },
+      formRequests: { orderBy: { createdAt: "desc" }, take: 50 },
       workspace: { select: { currency: true, cancellationAlertThreshold: true, language: true, region: true } },
     },
   });
 
   if (!patient) notFound();
+
+  const formTemplates = await prisma.formTemplate.findMany({
+    where: { workspaceId: userId, archivedAt: null },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true },
+  });
 
   const currency = patient.workspace.currency;
   const lang = toLang(patient.workspace.language);
@@ -136,12 +144,29 @@ export default async function PatientProfilePage({ params }: PageProps) {
               <h1 className="text-2xl font-bold">
                 {patient.lastName}, {patient.firstName}
               </h1>
-              {!patient.deletedAt && (
-                <InviteButton
-                  patientId={patient.id}
-                  hasPortalAccess={!!patient.portalUser}
-                />
-              )}
+              <div className="flex flex-wrap justify-end gap-2">
+                {!patient.deletedAt && (
+                  <Button variant="outline" size="sm" render={<Link href={`/dashboard/billing/new?patient=${patient.id}`} />}>
+                    <FilePlus2 className="mr-1.5 h-3.5 w-3.5" />
+                    {t("billing.new")}
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  render={<a href={`/api/export/patient/${patient.id}`} download />}
+                  title={t("profile.exportHint")}
+                >
+                  <Download className="mr-1.5 h-3.5 w-3.5" />
+                  {t("profile.export")}
+                </Button>
+                {!patient.deletedAt && (
+                  <InviteButton
+                    patientId={patient.id}
+                    hasPortalAccess={!!patient.portalUser}
+                  />
+                )}
+              </div>
             </div>
             <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 text-sm text-muted-foreground">
               {patient.email && (
@@ -287,6 +312,22 @@ export default async function PatientProfilePage({ params }: PageProps) {
               </div>
             )}
           </div>
+
+          {/* Intake, consent and other forms */}
+          <PatientForms
+            patientId={patient.id}
+            templates={formTemplates}
+            disabled={!!patient.deletedAt}
+            requests={patient.formRequests.map((r) => ({
+              id: r.id,
+              name: r.name,
+              status: r.status,
+              token: r.token,
+              signed: r.signedAt !== null,
+              createdAt: r.createdAt.toISOString(),
+              completedAt: r.completedAt?.toISOString() ?? null,
+            }))}
+          />
 
           {/* Statement of payments for insurance */}
           <StatementCard patientId={patient.id} patientHasEmail={!!patient.email} />

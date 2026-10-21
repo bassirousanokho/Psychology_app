@@ -9,7 +9,7 @@ import { Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { updateSettings, exportPatientData, type SettingsFormData } from "@/app/(dashboard)/dashboard/settings/actions";
+import { updateSettings, type SettingsFormData } from "@/app/(dashboard)/dashboard/settings/actions";
 import { ChangeRateDialog } from "./change-rate-dialog";
 import { REGIONS, REGION_CONFIG, type Region } from "@/lib/regions";
 import { useI18n } from "@/i18n/client";
@@ -27,6 +27,7 @@ const schema = z.object({
   qstRate: z.number({ message: "Enter a rate" }).min(0).max(100),
   language: z.enum(["fr", "en"]),
   sessionRemindersEnabled: z.boolean(),
+  patientSelfServiceEnabled: z.boolean(),
   currency: z.string().min(1),
   workingHoursStart: z.string().regex(/^\d{2}:\d{2}$/),
   workingHoursEnd: z.string().regex(/^\d{2}:\d{2}$/),
@@ -50,25 +51,6 @@ interface SettingsFormProps {
 export function SettingsForm({ defaults, practiceRate }: SettingsFormProps) {
   const [saving, setSaving] = useState(false);
   const { t, tError, money } = useI18n();
-  const [exporting, setExporting] = useState(false);
-
-  async function handleExport() {
-    setExporting(true);
-    const result = await exportPatientData();
-    setExporting(false);
-    if (!result.success) {
-      toast.error(tError(result.error));
-      return;
-    }
-    const blob = new Blob([JSON.stringify(result.data, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `patients-export-${new Date().toISOString().split("T")[0]}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success(t("settings.exported"));
-  }
   const {
     register,
     handleSubmit,
@@ -309,6 +291,13 @@ export function SettingsForm({ defaults, practiceRate }: SettingsFormProps) {
             error={errors.cancellationAlertThreshold?.message && tError(errors.cancellationAlertThreshold.message)}
           />
         </div>
+        <label className="flex items-start gap-3 text-sm">
+          <input type="checkbox" className="mt-0.5 h-4 w-4" {...register("patientSelfServiceEnabled")} />
+          <span>
+            {t("settings.selfService")}
+            <span className="block text-xs text-muted-foreground">{t("settings.selfServiceHint")}</span>
+          </span>
+        </label>
       </section>
 
       {/* Patient reminders */}
@@ -337,17 +326,9 @@ export function SettingsForm({ defaults, practiceRate }: SettingsFormProps) {
 
       <div className="flex items-center justify-between">
         <div>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={handleExport}
-            disabled={exporting}
-          >
-            {exporting ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Download className="mr-2 h-4 w-4" />
-            )}
+          {/* ZIP of every patient file: notes, messages, forms, invoices and documents */}
+          <Button type="button" variant="outline" render={<a href="/api/export/all" download />}>
+            <Download className="mr-2 h-4 w-4" />
             {t("settings.export")}
           </Button>
           <p className="mt-1 text-xs text-muted-foreground">

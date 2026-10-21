@@ -798,6 +798,66 @@ Recette now runs at **https://psy-app-804784013458.northamerica-northeast1.run.a
 - [ ] Signed out, open an invitation link: the sign-up page shows (it used to redirect in a loop).
 - [ ] `/portal/sign-in` and `/portal/no-access` open without redirect loops.
 
+## 17. Invoices, calendar views, portal changes, forms, templates, export, reports (2026-10-24)
+
+### 17.1 Custom invoice
+- [ ] Billing → **New invoice**: choose a patient; their sessions to bill are listed (completed, charged cancellations, no-shows, scheduled). Cancelled sessions without a fee are not listed.
+- [ ] Tick two sessions: one line each, with the date in the description. Add a free line (e.g. « Rapport écrit ») with a 20 % discount: the amount and total update.
+- [ ] Hourly work (admin / writing) appears as hours × hourly rate (e.g. 1.5 × 90 $).
+- [ ] Create the draft: you land on the invoice page; the number follows the sequence. Edit it (remove a session, change the due date), save: the removed session can be billed again.
+- [ ] From a session page, **Custom invoice…** opens the editor with that session already ticked.
+- [ ] A session already on another invoice can't be added twice (error shown).
+- [ ] Public invoice page: one row per line; quantity / unit price columns appear only when needed; discounts shown under the line.
+
+### 17.2 Correcting an invoice (credit note)
+- [ ] An unsent, unpaid draft: **Withdraw draft** → status Cancelled, no credit note, its sessions are free again.
+- [ ] Mark an invoice paid: it can no longer be edited (message explains why).
+- [ ] **Cancel (note de crédit)** with a reason and « Create a corrected invoice » ticked, payment « carried over »: a credit note NC-AAAA-0001 with a negative total appears in Billing, the invoice is Cancelled, and a corrected draft opens with the same lines.
+- [ ] Revenue collected doesn't double count: it goes back to the earlier figure, and rises again once the corrected invoice is marked paid.
+- [ ] Public pages: the cancelled invoice shows « Facture annulée par note de crédit N° … »; the credit note shows « Annule la facture N° … » and the reason.
+- [ ] Filter « Cancelled & credit notes » lists both. Overdue reminders never target cancelled invoices or credit notes.
+- [ ] CSV export: credit note row (Type « Note de crédit », negative amounts) and the cancelled invoice with status CANCELLED.
+
+### 17.3 Calendar views
+- [ ] Day / Week / Month switch; Previous / Next move by one day, week or month; Today comes back.
+- [ ] Month view: up to 3 sessions per day, « +N autres » opens the day; clicking a session opens its panel.
+- [ ] Week view: clicking a day header opens that day. Drag and drop still works in day and week views.
+- [ ] On a phone the calendar opens on the day view; the week view scrolls sideways.
+
+### 17.4 Patient changes from the portal
+- [ ] Settings → Cancellations: « Patients can cancel or move their sessions from the portal » (on by default).
+- [ ] Portal → Appointments: upcoming sessions show **Move** and **Cancel**, with the policy sentence above.
+- [ ] Cancel more than 48 h ahead: no fee. You receive a notice email, the patient a confirmation (once Resend is set up).
+- [ ] Cancel less than 48 h ahead: warning with the price; the session is cancelled with that fee (changeable from the calendar).
+- [ ] Move: the booking page says which session is being moved; the old slot is shown free; the session moves.
+- [ ] Less than 48 h ahead, Move is greyed out with an explanation.
+- [ ] Turn the setting off: the buttons disappear.
+- [ ] Booking a new session sends a confirmation to the patient and a notice to you.
+
+### 17.5 Forms (intake, consent)
+- [ ] Sidebar → Forms: add the ready-made « Formulaire d'accueil » and « Consentement aux services psychologiques »; **review their wording**.
+- [ ] Build a form: each field type, required fields, options, move up / down, signature on/off. A choice question with one option is refused.
+- [ ] Patient profile → Forms: send the consent. Without an email provider the link is copied; it's also in the patient's portal (Forms, plus a notice on the home page).
+- [ ] Open the link signed out: required questions are flagged if missing; the signature (typed full name) is required; after sending, a thank-you page; reopening says it's already filled in.
+- [ ] Profile: status Completed, « signed »; View answers shows the answers, the signature, date, IP address and browser; printable.
+- [ ] Withdraw a pending form: its link stops working.
+- [ ] Editing a form after sending doesn't change forms already sent.
+
+### 17.6 Note templates
+- [ ] Clinical Notes → Note templates: add SOAP and DAP from the common structures, create one of your own, edit, delete.
+- [ ] Session page: « Insert a template… » fills empty notes, or appends below existing text. Not shown on completed notes.
+
+### 17.7 Data export
+- [ ] Patient profile → **Export file**: a ZIP with dossier.json, notes/*.txt (decrypted), formulaires/ (with signatures), documents/ (the actual files).
+- [ ] Settings → Export all patient files (ZIP): one folder per patient, including patients in Recently deleted.
+- [ ] Both exports appear in the audit log (EXPORT_PATIENT_DATA).
+
+### 17.8 Reports
+- [ ] Sidebar → Reports: last 12 months by default, or a calendar year.
+- [ ] Figures match Billing and the calendar: collected, sessions held, cancellation / no-show rate, patients seen.
+- [ ] Charts: income by month (invoiced vs collected), sessions by month (completed / cancelled / no-show), new patients, sessions by weekday.
+- [ ] Unpaid invoices by days late, and top 5 patients by income.
+
 ---
 
 ## Suspected issues

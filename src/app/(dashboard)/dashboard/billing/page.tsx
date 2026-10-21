@@ -1,11 +1,12 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Download } from "lucide-react";
+import { Download, Plus } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import prisma from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
 import { missingLegalDetails } from "@/lib/invoice-legal";
+import { regionConfig } from "@/lib/regions";
 import { ensureWorkspace } from "@/lib/workspace";
 import { formatMoney, langOf, localeOf } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -19,9 +20,10 @@ const PAGE_SIZE = 25;
 
 const FILTERS = {
   all: { label: "billing.filter.all", where: {} },
-  unpaid: { label: "billing.filter.unpaid", where: { status: { in: ["DRAFT", "SENT"] } } },
+  unpaid: { label: "billing.filter.unpaid", where: { kind: "INVOICE", status: { in: ["DRAFT", "SENT"] } } },
   overdue: { label: "billing.filter.overdue", where: { status: "OVERDUE" } },
-  paid: { label: "billing.filter.paid", where: { status: "PAID" } },
+  paid: { label: "billing.filter.paid", where: { kind: "INVOICE", status: "PAID" } },
+  credit: { label: "billing.filter.credit", where: { OR: [{ kind: "CREDIT_NOTE" }, { status: "CANCELLED" }] } },
 } satisfies Record<string, { label: MessageKey; where: Prisma.InvoiceWhereInput }>;
 type FilterKey = keyof typeof FILTERS;
 
@@ -62,7 +64,7 @@ export default async function BillingPage({
   const { t } = makeI18n(toLang(workspace?.language), locale);
 
   const where: Prisma.InvoiceWhereInput = { workspaceId: userId, ...FILTERS[filter].where };
-  const [invoices, filteredCount, stats, years] = await Promise.all([
+  const [invoices, filteredCount, stats, collected, years] = await Promise.all([
     prisma.invoice.findMany({
       where,
       orderBy: { createdAt: "desc" },
@@ -75,9 +77,14 @@ export default async function BillingPage({
     prisma.invoice.count({ where }),
     prisma.invoice.groupBy({
       by: ["status"],
-      where: { workspaceId: userId },
+      where: { workspaceId: userId, kind: "INVOICE" },
       _sum: { totalAmount: true },
       _count: true,
+    }),
+    // Money received: paid invoices, less refunds (credit notes of paid invoices)
+    prisma.invoice.aggregate({
+      where: { workspaceId: userId, paidAt: { not: null } },
+      _sum: { totalAmount: true },
     }),
     prisma.invoice.findFirst({
       where: { workspaceId: userId },
@@ -95,7 +102,8 @@ export default async function BillingPage({
     invoiceNumber: inv.invoiceNumber,
     patientName: `${inv.patient.lastName}, ${inv.patient.firstName}`,
     totalAmount: Number(inv.totalAmount),
-    status: inv.status as InvoiceRow["status"],
+    kind: inv.kind,
+    status: inv.status,
     dueDate: inv.dueDate.toISOString(),
     sentAt: inv.sentAt?.toISOString() ?? null,
     paidAt: inv.paidAt?.toISOString() ?? null,
@@ -103,10 +111,12 @@ export default async function BillingPage({
     publicToken: inv.publicToken,
   }));
 
-  const revenue = statMap["PAID"]?.sum ?? 0;
+  const revenue = Number(collected._sum.totalAmount ?? 0);
   const outstanding = (statMap["SENT"]?.sum ?? 0) + (statMap["DRAFT"]?.sum ?? 0);
   const overdue = statMap["OVERDUE"]?.sum ?? 0;
-  const totalInvoices = Object.values(statMap).reduce((acc, v) => acc + v.count, 0);
+  const totalInvoices = Object.entries(statMap)
+    .filter(([status]) => status !== "CANCELLED")
+    .reduce((acc, [, v]) => acc + v.count, 0);
 
   const pageCount = Math.max(1, Math.ceil(filteredCount / PAGE_SIZE));
   const href = (f: FilterKey, p = 1) =>
@@ -142,8 +152,14 @@ export default async function BillingPage({
           {/* Invoice table */}
           <div className="rounded-xl border bg-card">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-3">
-              <h2 className="font-semibold">{t("billing.invoices")}</h2>
-              <nav className="flex gap-1">
+              <div className="flex items-center gap-3">
+                <h2 className="font-semibold">{t("billing.invoices")}</h2>
+                <Button size="sm" render={<Link href="/dashboard/billing/new" />}>
+                  <Plus className="mr-1.5 h-3.5 w-3.5" />
+                  {t("billing.new")}
+                </Button>
+              </div>
+              <nav className="flex flex-wrap gap-1">
                 {(Object.keys(FILTERS) as FilterKey[]).map((f) => (
                   <Link
                     key={f}
@@ -158,7 +174,7 @@ export default async function BillingPage({
                 ))}
               </nav>
             </div>
-            <BillingTable rows={rows} currency={currency} locale={locale} />
+            <BillingTable rows={rows} currency={currency} locale={locale} creditNoteLabel={regionConfig(workspace?.region).creditNoteTitle} />
             {pageCount > 1 && (
               <div className="flex items-center justify-between border-t px-5 py-3 text-sm">
                 <span className="text-muted-foreground">

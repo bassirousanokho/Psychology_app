@@ -6,16 +6,7 @@ import { CalendarPlus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/i18n/client";
-import {
-  HOURLY_DURATIONS,
-  HOURLY_STEP_MIN,
-  MAX_OCCURRENCES,
-  SESSION_TYPES,
-  formatDuration,
-  hourlyAmount,
-  isHourly,
-  type SessionType,
-} from "@/lib/session-types";
+import { HOURLY_DURATIONS, HOURLY_STEP_MIN, MAX_OCCURRENCES, SESSION_TYPES, formatDuration, hourlyAmount, isHourly, type SessionType, type HourlyType } from "@/lib/session-types";
 import {
   createAppointment,
   createAppointmentSeries,
@@ -42,7 +33,7 @@ export type Availability = {
   workingDays: number[];      // 1=Mon … 7=Sun
   workingHoursStart: string;  // "HH:mm"
   workingHoursEnd: string;    // "HH:mm"
-  hourlyRates: { ADMIN: number; WRITING: number };
+  hourlyRates: Record<HourlyType, number>;
   currency: string;
 };
 
@@ -217,7 +208,7 @@ export function BookingForm({
         ? freeStartTimes(day, duration, rangeStart, rangeEnd, [], true)
         : freeStartTimes(day, duration, rangeStart, rangeEnd, busy)
       : [];
-  const hourlyPrice = hourly ? hourlyAmount(availability.hourlyRates[type as "ADMIN" | "WRITING"], duration) : null;
+  const hourlyPrice = hourly ? hourlyAmount(availability.hourlyRates[type as HourlyType], duration) : null;
 
   function handleTypeChange(next: SessionType) {
     setType(next);
@@ -331,7 +322,7 @@ export function BookingForm({
         )}
         {hourly && (
           <p className="text-xs text-muted-foreground">
-            {t("booking.hourlyHint", { rate: money(availability.hourlyRates[type as "ADMIN" | "WRITING"]) })}
+            {t("booking.hourlyHint", { rate: money(availability.hourlyRates[type as HourlyType]) })}
           </p>
         )}
       </div>

@@ -7,6 +7,7 @@ import prisma from "@/lib/prisma";
 import { sendCreditNoteEmail, sendInvoiceEmail } from "@/lib/email";
 import { formatLongDate, formatMoney, langOf, localeOf } from "@/lib/format";
 import { regionConfig } from "@/lib/regions";
+import type { SessionType } from "@/lib/session-types";
 import { createInvoiceWithLines, isEditable, sessionLine, updateDraftLines, type DraftLine } from "@/lib/invoices";
 
 type ActionResult = { success: true } | { success: false; error: string };
@@ -170,7 +171,7 @@ export type BillableSession = {
   id: string;
   startTime: string; // ISO
   status: "SCHEDULED" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
-  type: "PSYCHOTHERAPY" | "ADMIN" | "WRITING";
+  type: SessionType;
   line: DraftLine;
 };
 

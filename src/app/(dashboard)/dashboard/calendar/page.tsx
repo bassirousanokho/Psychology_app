@@ -60,6 +60,7 @@ export default async function CalendarPage({ searchParams }: CalendarPageProps) 
         workingHoursEnd: true,
         hourlyRateAdmin: true,
         hourlyRateWriting: true,
+        hourlyRateConference: true,
         currency: true,
         cancellationNoticeHours: true,
       },
@@ -73,6 +74,7 @@ export default async function CalendarPage({ searchParams }: CalendarPageProps) 
     hourlyRates: {
       ADMIN: Number(workspace?.hourlyRateAdmin ?? 0),
       WRITING: Number(workspace?.hourlyRateWriting ?? 0),
+      CONFERENCE: Number(workspace?.hourlyRateConference ?? 0),
     },
     currency: workspace?.currency ?? "EUR",
   };

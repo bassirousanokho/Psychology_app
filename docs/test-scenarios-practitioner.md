@@ -896,6 +896,12 @@ Recette now runs at **https://psy-app-804784013458.northamerica-northeast1.run.a
 - [ ] Patient profile: the « Cancellations and no-shows » card counts no-shows in « Last 30 days »; the alert triggers on cancellations + no-shows. History shows « frais … » on no-shows.
 - [ ] Portal → Appointments shows the fee on a no-show.
 
+## 20. Conference as billable work (2026-10-26)
+
+- [ ] Settings → hourly rates: « Conférences (à l'heure) ».
+- [ ] Book a conference (type « Conférence ») by duration in half hours: priced hours × rate; shown in teal in the calendar (legend too); may overlap therapy sessions.
+- [ ] Complete it, then Generate invoice: line « Conférence — date (2 h) », 2 × rate. Billing → New invoice also has a « + Conférence (heure) » quick-add.
+
 ---
 
 ## Suspected issues

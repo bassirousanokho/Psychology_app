@@ -46,6 +46,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
           defaultTariff: true,
           hourlyRateAdmin: true,
           hourlyRateWriting: true,
+          hourlyRateConference: true,
         },
       },
     },

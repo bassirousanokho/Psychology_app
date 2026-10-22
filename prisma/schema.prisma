@@ -27,6 +27,7 @@ enum SessionType {
   PSYCHOTHERAPY // priced per session (patient rate)
   ADMIN // administrative work, priced per hour
   WRITING // report writing, priced per hour
+  CONFERENCE // talk or training given, priced per hour
 }
 
 enum InvoiceStatus {
@@ -72,7 +73,8 @@ model Workspace {
 
   // Hourly rates for non-therapy work (time filled per half hour)
   hourlyRateAdmin   Decimal @default(0) @db.Decimal(10, 2)
-  hourlyRateWriting Decimal @default(0) @db.Decimal(10, 2)
+  hourlyRateWriting    Decimal @default(0) @db.Decimal(10, 2)
+  hourlyRateConference Decimal @default(0) @db.Decimal(10, 2)
 
   // Cancellations: notice period shown when cancelling (the practitioner decides
   // whether a fee applies) and the per-patient alert threshold over 30 days

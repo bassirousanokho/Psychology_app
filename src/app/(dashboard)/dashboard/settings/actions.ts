@@ -19,6 +19,7 @@ const settingsSchema = z.object({
   qstRate: z.coerce.number().min(0).max(100),
   hourlyRateAdmin: z.coerce.number().min(0, "Must be 0 or greater"),
   hourlyRateWriting: z.coerce.number().min(0, "Must be 0 or greater"),
+  hourlyRateConference: z.coerce.number().min(0, "Must be 0 or greater"),
   cancellationNoticeHours: z.coerce.number().int().min(0).max(720, "At most 30 days"),
   cancellationAlertThreshold: z.coerce.number().int().min(1, "At least 1").max(50),
   retentionYears: z.coerce.number().int().min(1, "At least 1 year").max(50),

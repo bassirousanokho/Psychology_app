@@ -61,6 +61,7 @@ const STATUS_STYLES: Record<CalendarAppointment["status"], string> = {
 const HOURLY_STYLES: Record<Exclude<SessionType, "PSYCHOTHERAPY">, string> = {
   ADMIN:   "bg-violet-100 border-violet-400 text-violet-900 dark:bg-violet-950 dark:border-violet-600 dark:text-violet-200",
   WRITING: "bg-amber-100  border-amber-400  text-amber-900  dark:bg-amber-950  dark:border-amber-600  dark:text-amber-200",
+  CONFERENCE: "bg-teal-100 border-teal-400 text-teal-900 dark:bg-teal-950 dark:border-teal-600 dark:text-teal-200",
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -75,7 +76,7 @@ function clamp(v: number, min: number, max: number) {
 
 function blockStyle(appt: CalendarAppointment): string {
   const inactive = appt.status === "CANCELLED" || appt.status === "NO_SHOW";
-  if (isHourly(appt.type) && !inactive) return HOURLY_STYLES[appt.type as "ADMIN" | "WRITING"];
+  if (isHourly(appt.type) && !inactive) return HOURLY_STYLES[appt.type as Exclude<SessionType, "PSYCHOTHERAPY">];
   return STATUS_STYLES[appt.status];
 }
 
@@ -269,6 +270,7 @@ export function CalendarView({
           <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-blue-400" />{t("type.PSYCHOTHERAPY")}</span>
           <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-violet-400" />{t("typeShort.ADMIN")}</span>
           <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-amber-400" />{t("typeShort.WRITING")}</span>
+          <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-teal-400" />{t("typeShort.CONFERENCE")}</span>
         </span>
       </div>
 

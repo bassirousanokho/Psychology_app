@@ -33,6 +33,7 @@ export default async function NewInvoicePage({
         defaultTariff: true,
         hourlyRateAdmin: true,
         hourlyRateWriting: true,
+        hourlyRateConference: true,
       },
     }),
     prisma.patient.findMany({

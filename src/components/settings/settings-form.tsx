@@ -19,6 +19,7 @@ const schema = z.object({
   region: z.enum(REGIONS),
   hourlyRateAdmin: z.number({ message: "Enter an amount" }).min(0, "Must be 0 or greater"),
   hourlyRateWriting: z.number({ message: "Enter an amount" }).min(0, "Must be 0 or greater"),
+  hourlyRateConference: z.number({ message: "Enter an amount" }).min(0, "Must be 0 or greater"),
   cancellationNoticeHours: z.number({ message: "Enter a number" }).int().min(0).max(720, "At most 30 days"),
   cancellationAlertThreshold: z.number({ message: "Enter a number" }).int().min(1, "At least 1").max(50),
   retentionYears: z.number({ message: "Enter a number" }).int().min(1, "At least 1 year").max(50),
@@ -166,6 +167,13 @@ export function SettingsForm({ defaults, practiceRate }: SettingsFormProps) {
             step="0.01"
             register={register("hourlyRateWriting", { valueAsNumber: true })}
             error={errors.hourlyRateWriting?.message && tError(errors.hourlyRateWriting.message)}
+          />
+          <NumberField
+            id="hourlyRateConference"
+            label={t("settings.hourlyConference")}
+            step="0.01"
+            register={register("hourlyRateConference", { valueAsNumber: true })}
+            error={errors.hourlyRateConference?.message && tError(errors.hourlyRateConference.message)}
           />
         </div>
 

@@ -12,6 +12,7 @@ import {
   HOURLY_STEP_MIN,
   MAX_OCCURRENCES,
   hourlyAmount,
+  hourlyRateFor,
   isHourly,
   type SessionType,
 } from "@/lib/session-types";
@@ -76,7 +77,7 @@ export async function createAppointment(data: AppointmentFormData): Promise<Acti
 
   const workspace = await prisma.workspace.findUniqueOrThrow({
     where: { id: userId },
-    select: { taxRate: true, hourlyRateAdmin: true, hourlyRateWriting: true },
+    select: { taxRate: true, hourlyRateAdmin: true, hourlyRateWriting: true, hourlyRateConference: true },
   });
 
   let pricing: { tariffAmount: number | Awaited<ReturnType<typeof psychotherapyRate>>; hourlyRate?: number };
@@ -84,7 +85,7 @@ export async function createAppointment(data: AppointmentFormData): Promise<Acti
     if (minutes % HOURLY_STEP_MIN !== 0) {
       return { success: false, error: "Time spent must be in half-hour steps" };
     }
-    const rate = Number(type === "ADMIN" ? workspace.hourlyRateAdmin : workspace.hourlyRateWriting);
+    const rate = hourlyRateFor(workspace, type);
     pricing = { tariffAmount: hourlyAmount(rate, minutes), hourlyRate: rate };
   } else {
     // Refuse double bookings (cancelled / no-show sessions free their slot)
@@ -194,11 +195,9 @@ export async function createAppointmentSeries(
 
   const workspace = await prisma.workspace.findUniqueOrThrow({
     where: { id: userId },
-    select: { taxRate: true, hourlyRateAdmin: true, hourlyRateWriting: true },
+    select: { taxRate: true, hourlyRateAdmin: true, hourlyRateWriting: true, hourlyRateConference: true },
   });
-  const hourlyRate = isHourly(type)
-    ? Number(type === "ADMIN" ? workspace.hourlyRateAdmin : workspace.hourlyRateWriting)
-    : undefined;
+  const hourlyRate = isHourly(type) ? hourlyRateFor(workspace, type) : undefined;
 
   const plan = await planSeries(userId, type, start, end, everyWeeks, count);
   const free = plan.filter((o) => !o.conflict);

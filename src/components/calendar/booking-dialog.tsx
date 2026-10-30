@@ -6,6 +6,7 @@ import { CalendarPlus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/i18n/client";
+import { periodFor, type TimeOffPeriod } from "@/lib/time-off-shared";
 import { HOURLY_DURATIONS, HOURLY_STEP_MIN, MAX_OCCURRENCES, SESSION_TYPES, formatDuration, hourlyAmount, isHourly, type SessionType, type HourlyType } from "@/lib/session-types";
 import {
   createAppointment,
@@ -35,6 +36,7 @@ export type Availability = {
   workingHoursEnd: string;    // "HH:mm"
   hourlyRates: Record<HourlyType, number>;
   currency: string;
+  timeOff: TimeOffPeriod[]; // upcoming and shown days off (no therapy sessions)
 };
 
 const DURATIONS = [30, 45, 50, 60, 75, 90, 120];
@@ -200,10 +202,11 @@ export function BookingForm({
 
   const day = date ? parse(date, "yyyy-MM-dd", new Date()) : null;
   const isWorkingDay = day ? availability.workingDays.includes(isoDay(day)) : true;
+  const away = date ? periodFor(availability.timeOff, date) : undefined;
   const rangeStart = showAllTimes ? EXTENDED_START : availability.workingHoursStart;
   const rangeEnd = showAllTimes ? EXTENDED_END : availability.workingHoursEnd;
   const times =
-    day && busy
+    day && busy && !(away && !hourly)
       ? hourly
         ? freeStartTimes(day, duration, rangeStart, rangeEnd, [], true)
         : freeStartTimes(day, duration, rangeStart, rangeEnd, busy)
@@ -232,7 +235,7 @@ export function BookingForm({
   const previewKey = `${patientId}|${type}|${start?.toISOString()}|${duration}|${repeatWeeks}|${repeatCount}`;
   const [previewFor, setPreviewFor] = useState<string | null>(null);
   const currentPreview = preview && previewFor === previewKey ? preview : null;
-  const freeCount = currentPreview?.filter((o) => !o.conflict).length ?? 0;
+  const freeCount = currentPreview?.filter((o) => o.conflict === null).length ?? 0;
   const repeating = !reschedule && repeatWeeks > 0;
 
   function handleSubmit() {
@@ -366,6 +369,14 @@ export function BookingForm({
             </label>
           </div>
 
+          {away && (
+            <p className="rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+              {hourly
+                ? t("booking.awayHourly", { label: away.label || t("timeOff.default") })
+                : t("booking.away", { label: away.label || t("timeOff.default") })}
+            </p>
+          )}
+
           {!isWorkingDay && (
             <p className="text-xs text-amber-600 dark:text-amber-400">
               {t("booking.notWorkingDay", { day: fmt(day, "EEEE") })}
@@ -448,10 +459,14 @@ export function BookingForm({
               {currentPreview.map((o) => (
                 <li
                   key={o.start}
-                  className={cn("flex justify-between gap-3 px-3 py-1.5", o.conflict && "text-muted-foreground line-through")}
+                  className={cn("flex justify-between gap-3 px-3 py-1.5", o.conflict !== null && "text-muted-foreground line-through")}
                 >
                   <span>{fmt(o.start, "EEE d MMM yyyy, HH:mm")}</span>
-                  {o.conflict && <span className="no-underline text-xs text-destructive">{t("booking.takenBy", { name: o.conflict })}</span>}
+                  {o.conflict !== null && (
+                    <span className="no-underline text-xs text-destructive">
+                      {o.away ? t("booking.onTimeOff", { label: o.conflict || t("timeOff.default") }) : t("booking.takenBy", { name: o.conflict })}
+                    </span>
+                  )}
                 </li>
               ))}
             </ul>

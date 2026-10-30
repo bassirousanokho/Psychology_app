@@ -902,6 +902,15 @@ Recette now runs at **https://psy-app-804784013458.northamerica-northeast1.run.a
 - [ ] Book a conference (type « Conférence ») by duration in half hours: priced hours × rate; shown in teal in the calendar (legend too); may overlap therapy sessions.
 - [ ] Complete it, then Generate invoice: line « Conférence — date (2 h) », 2 × rate. Billing → New invoice also has a « + Conférence (heure) » quick-add.
 
+## 21. Time off on the calendar (2026-10-30)
+
+- [ ] Calendar → **Congés**: add a period (first day, last day, optional label). It appears hatched with its label in day, week and month views, and in « Congés à venir »; it can be removed there.
+- [ ] Sessions already booked in the period are listed after adding it, with links to their day.
+- [ ] Booking a therapy session on a day off: the dialog says so and offers no times; forcing it is refused. Admin / writing / conference work can still be added.
+- [ ] A weekly series crossing the period skips those dates (« Congé — label » in the preview).
+- [ ] Dragging or moving a session onto a day off is refused; restoring a cancelled session that falls on a day off too.
+- [ ] Portal → Book: days off aren't offered; « Le cabinet est fermé : … » lists the next closures. Moving a session onto one is refused.
+
 ---
 
 ## Suspected issues

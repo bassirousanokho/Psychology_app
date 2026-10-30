@@ -7,6 +7,8 @@ import prisma from "@/lib/prisma";
 import { CalendarView, type CalendarAppointment, type CalendarViewMode } from "@/components/calendar/calendar-view";
 import { BookAppointmentButton, type Availability } from "@/components/calendar/booking-dialog";
 import type { PatientOption } from "@/components/calendar/patient-combobox";
+import { TimeOffButton } from "@/components/calendar/time-off-dialog";
+import { timeOffBetween, upcomingTimeOff } from "@/lib/time-off";
 
 interface CalendarPageProps {
   searchParams: Promise<{ view?: string; date?: string; week?: string }>;
@@ -67,6 +69,13 @@ export default async function CalendarPage({ searchParams }: CalendarPageProps) 
     }),
   ]);
 
+  // Days off shown in this view, plus upcoming ones (booking dialog, time off list)
+  const [shownOff, upcomingOff] = await Promise.all([
+    timeOffBetween(userId, rangeStart, rangeEnd),
+    upcomingTimeOff(userId),
+  ]);
+  const timeOff = [...shownOff, ...upcomingOff.filter((u) => !shownOff.some((s) => s.id === u.id))];
+
   const availability: Availability = {
     workingDays: workspace?.workingDays ?? [1, 2, 3, 4, 5],
     workingHoursStart: workspace?.workingHoursStart ?? "09:00",
@@ -77,6 +86,7 @@ export default async function CalendarPage({ searchParams }: CalendarPageProps) 
       CONFERENCE: Number(workspace?.hourlyRateConference ?? 0),
     },
     currency: workspace?.currency ?? "EUR",
+    timeOff,
   };
 
   // Serialize Dates → ISO strings before passing to Client Components
@@ -104,7 +114,10 @@ export default async function CalendarPage({ searchParams }: CalendarPageProps) 
           <p className="text-sm text-muted-foreground">
             {tp(activeCount, `calendar.count.${view}`)}
           </p>
-          <BookAppointmentButton patients={patients} availability={availability} />
+          <div className="flex flex-wrap gap-2">
+            <TimeOffButton upcoming={upcomingOff} />
+            <BookAppointmentButton patients={patients} availability={availability} />
+          </div>
         </div>
 
         <CalendarView

@@ -2,6 +2,7 @@
 import Link from "next/link";
 import prisma from "@/lib/prisma";
 import { requirePatientAuth } from "@/lib/patient-auth";
+import { periodFor, upcomingTimeOff } from "@/lib/time-off";
 import { portalI18n } from "@/i18n/server";
 import { getBusyRanges } from "@/app/portal/actions";
 import { BookingSlots } from "@/components/portal/booking-slots";
@@ -22,6 +23,7 @@ export default async function BookPage({ searchParams }: { searchParams: Promise
 
   // Pre-fetch busy ranges for the next 14 working days
   // so the client component never needs to make extra round-trips
+  const closures = await upcomingTimeOff(workspaceId);
   const dates: string[] = [];
 
   function isoDay(d: Date) { return d.getDay() === 0 ? 7 : d.getDay(); }
@@ -31,7 +33,8 @@ export default async function BookPage({ searchParams }: { searchParams: Promise
   cursor.setHours(0, 0, 0, 0);
   // Scan at most ~3 months ahead so a workspace without working days can't hang the page
   for (let scanned = 0; dates.length < 14 && scanned < 90; scanned++) {
-    if (workspace.workingDays.includes(isoDay(cursor))) dates.push(fmt(cursor, "yyyy-MM-dd"));
+    const key = fmt(cursor, "yyyy-MM-dd");
+    if (workspace.workingDays.includes(isoDay(cursor)) && !periodFor(closures, key)) dates.push(key);
     cursor.setDate(cursor.getDate() + 1);
   }
   const busyByDate: Record<string, [number, number][]> = Object.fromEntries(
@@ -47,6 +50,20 @@ export default async function BookPage({ searchParams }: { searchParams: Promise
         </p>
       </div>
 
+      {closures.length > 0 && (
+        <p className="rounded-xl border bg-muted/40 px-4 py-3 text-sm">
+          {t("portal.closed")}{" "}
+          {closures
+            .slice(0, 3)
+            .map((c) =>
+              c.start === c.end
+                ? fmt(`${c.start}T12:00:00`, "d MMMM")
+                : `${fmt(`${c.start}T12:00:00`, "d MMMM")} – ${fmt(`${c.end}T12:00:00`, "d MMMM")}`,
+            )
+            .join(", ")}
+        </p>
+      )}
+
       {moving && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-muted/40 px-4 py-3 text-sm">
           <span>{t("portal.moving", { date: fmt(moving.startTime, "EEEE d MMMM, HH:mm") })}</span>
@@ -61,6 +78,7 @@ export default async function BookPage({ searchParams }: { searchParams: Promise
         workingHoursStart={workspace.workingHoursStart}
         workingHoursEnd={workspace.workingHoursEnd}
         busyByDate={busyByDate}
+        offDays={closures.map(({ start, end }) => ({ start, end }))}
         rescheduleId={moving?.id}
       />
     </div>

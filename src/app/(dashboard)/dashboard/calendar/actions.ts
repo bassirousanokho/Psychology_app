@@ -6,6 +6,7 @@ import prisma from "@/lib/prisma";
 import { decrypt } from "@/lib/crypto";
 import { psychotherapyRate } from "@/lib/rates";
 import { appointmentSchema, type AppointmentFormData } from "@/lib/schemas";
+import { AWAY_ERROR, timeOffBetween, timeOffOn } from "@/lib/time-off";
 import { randomUUID } from "crypto";
 import { addWeeks } from "date-fns";
 import {
@@ -88,6 +89,7 @@ export async function createAppointment(data: AppointmentFormData): Promise<Acti
     const rate = hourlyRateFor(workspace, type);
     pricing = { tariffAmount: hourlyAmount(rate, minutes), hourlyRate: rate };
   } else {
+    if (await timeOffOn(userId, start)) return { success: false, error: AWAY_ERROR };
     // Refuse double bookings (cancelled / no-show sessions free their slot)
     const conflict = await findConflict(userId, start, end);
     if (conflict) return { success: false, error: overlapError(conflict) };
@@ -118,7 +120,7 @@ export async function createAppointment(data: AppointmentFormData): Promise<Acti
 
 // ── Recurring sessions ───────────────────────────────────────────────────────
 
-export type SeriesOccurrence = { start: string; end: string; conflict: string | null };
+export type SeriesOccurrence = { start: string; end: string; conflict: string | null; away?: boolean };
 
 /** Dates of a weekly / fortnightly series, each checked against existing therapy sessions. */
 async function planSeries(
@@ -134,11 +136,14 @@ async function planSeries(
     // addWeeks keeps the local time across daylight-saving changes
     const s = addWeeks(start, i * everyWeeks);
     const e = addWeeks(end, i * everyWeeks);
-    const conflict = isHourly(type) ? null : await findConflict(workspaceId, s, e);
+    const away = isHourly(type) ? null : await timeOffOn(workspaceId, s);
+    const conflict = isHourly(type) || away ? null : await findConflict(workspaceId, s, e);
     occurrences.push({
       start: s.toISOString(),
       end: e.toISOString(),
-      conflict: conflict ? `${conflict.patient.firstName} ${conflict.patient.lastName}` : null,
+      // Skipped: clashes with someone's session, or falls on time off (label shown)
+      conflict: away ? away.label ?? "" : conflict ? `${conflict.patient.firstName} ${conflict.patient.lastName}` : null,
+      away: !!away,
     });
   }
   return occurrences;
@@ -200,7 +205,7 @@ export async function createAppointmentSeries(
   const hourlyRate = isHourly(type) ? hourlyRateFor(workspace, type) : undefined;
 
   const plan = await planSeries(userId, type, start, end, everyWeeks, count);
-  const free = plan.filter((o) => !o.conflict);
+  const free = plan.filter((o) => o.conflict === null);
   if (free.length === 0) return { success: false, error: "Every date in this series clashes with another session" };
 
   const seriesId = randomUUID();
@@ -229,7 +234,7 @@ export async function createAppointmentSeries(
   }
 
   revalidatePath("/dashboard/calendar");
-  return { success: true, created: free.length, skipped: plan.filter((o) => o.conflict).map((o) => o.start) };
+  return { success: true, created: free.length, skipped: plan.filter((o) => o.conflict !== null).map((o) => o.start) };
 }
 
 /**
@@ -309,6 +314,7 @@ export async function updateAppointmentStatus(
     return { success: false, error: "Enter a valid fee" };
   }
   if (status === "SCHEDULED" && !isHourly(appt.type)) {
+    if (await timeOffOn(userId, appt.startTime)) return { success: false, error: AWAY_ERROR };
     const conflict = await findConflict(userId, appt.startTime, appt.endTime, id);
     if (conflict) {
       return {
@@ -376,6 +382,7 @@ export async function rescheduleAppointment(
     }
     tariffAmount = hourlyAmount(Number(appt.hourlyRate ?? 0), minutes);
   } else {
+    if (await timeOffOn(userId, start)) return { success: false, error: AWAY_ERROR };
     const conflict = await findConflict(userId, start, end, id);
     if (conflict) return { success: false, error: overlapError(conflict) };
   }
@@ -459,4 +466,65 @@ export async function getBusyIntervals(
   });
 
   return appts.map((a) => ({ start: a.startTime.toISOString(), end: a.endTime.toISOString() }));
+}
+
+// ── Time off ─────────────────────────────────────────────────────────────────
+
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Adds whole days off. Sessions already booked are kept: they're returned so
+ * the practitioner can move or cancel them.
+ */
+export async function createTimeOff(input: {
+  start: string; // YYYY-MM-DD
+  end: string;   // YYYY-MM-DD, inclusive
+  label: string;
+}): Promise<
+  | { success: true; booked: { id: string; startTime: string; patient: string }[] }
+  | { success: false; error: string }
+> {
+  const { userId } = await auth();
+  if (!userId) return { success: false, error: "Not authenticated" };
+  if (!DAY_RE.test(input.start) || !DAY_RE.test(input.end)) return { success: false, error: "Pick the first and last day" };
+  if (input.end < input.start) return { success: false, error: "The last day must be on or after the first" };
+  const from = new Date(`${input.start}T00:00:00`);
+  const to = new Date(`${input.end}T23:59:59.999`);
+  if (to.getTime() - from.getTime() > 366 * 86_400_000) return { success: false, error: "At most one year at a time" };
+
+  await prisma.timeOff.create({
+    data: {
+      workspaceId: userId,
+      startDate: new Date(`${input.start}T00:00:00Z`),
+      endDate: new Date(`${input.end}T00:00:00Z`),
+      label: input.label.trim().slice(0, 80) || null,
+    },
+  });
+
+  const booked = await prisma.appointment.findMany({
+    where: { workspaceId: userId, type: "PSYCHOTHERAPY", status: "SCHEDULED", startTime: { gte: from, lte: to } },
+    orderBy: { startTime: "asc" },
+    select: { id: true, startTime: true, patient: { select: { firstName: true, lastName: true } } },
+  });
+  revalidatePath("/dashboard/calendar");
+  return {
+    success: true,
+    booked: booked.map((b) => ({ id: b.id, startTime: b.startTime.toISOString(), patient: `${b.patient.firstName} ${b.patient.lastName}` })),
+  };
+}
+
+export async function deleteTimeOff(id: string): Promise<ActionResult> {
+  const { userId } = await auth();
+  if (!userId) return { success: false, error: "Not authenticated" };
+  const result = await prisma.timeOff.deleteMany({ where: { id, workspaceId: userId } });
+  if (result.count === 0) return { success: false, error: "Time off not found" };
+  revalidatePath("/dashboard/calendar");
+  return { success: true };
+}
+
+/** Time off overlapping the given days (booking dialog). */
+export async function getTimeOff(from: string, to: string) {
+  const { userId } = await auth();
+  if (!userId || !DAY_RE.test(from) || !DAY_RE.test(to)) return [];
+  return timeOffBetween(userId, new Date(`${from}T12:00:00`), new Date(`${to}T12:00:00`));
 }

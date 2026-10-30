@@ -28,6 +28,7 @@ import { Badge } from "@/components/ui/badge";
 import { BookingDialog, type Availability } from "./booking-dialog";
 import { AppointmentDialog } from "./appointment-dialog";
 import { gridHours, layoutLanes } from "@/lib/calendar-layout";
+import { periodFor, type TimeOffPeriod } from "@/lib/time-off-shared";
 import type { PatientOption } from "./patient-combobox";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -278,6 +279,7 @@ export function CalendarView({
         <MonthGrid
           anchor={anchor}
           appointments={appointments}
+          timeOff={availability.timeOff}
           onSelect={setSelected}
           onOpenDay={(d) => go("day", d)}
         />
@@ -442,6 +444,11 @@ function TimeGrid({
               >
                 {format(day, "d")}
               </p>
+              {periodFor(availability.timeOff, dateKey(day)) && (
+                <p className="mx-1 truncate rounded bg-teal-100 px-1 text-[10px] font-medium text-teal-900 dark:bg-teal-950 dark:text-teal-200">
+                  {periodFor(availability.timeOff, dateKey(day))!.label || t("timeOff.default")}
+                </p>
+              )}
             </button>
           ))}
         </div>
@@ -486,6 +493,14 @@ function TimeGrid({
                   onDragOver={(e) => handleDragOver(e, day)}
                   onDrop={(e) => handleDrop(e, day)}
                 >
+                  {/* Day off: hatched (slots stay clickable for hourly work) */}
+                  {periodFor(availability.timeOff, key) && (
+                    <div
+                      className="pointer-events-none absolute inset-0 z-0 bg-[repeating-linear-gradient(135deg,transparent_0,transparent_8px,rgb(20_184_166/0.12)_8px,rgb(20_184_166/0.12)_16px)]"
+                      aria-hidden
+                    />
+                  )}
+
                   {/* Hour lines + clickable slots */}
                   {Array.from({ length: totalHours }, (_, h) => (
                     <div
@@ -552,11 +567,13 @@ const MONTH_CHIPS = 3;
 function MonthGrid({
   anchor,
   appointments,
+  timeOff,
   onSelect,
   onOpenDay,
 }: {
   anchor: Date;
   appointments: CalendarAppointment[];
+  timeOff: TimeOffPeriod[];
   onSelect: (appt: CalendarAppointment) => void;
   onOpenDay: (day: Date) => void;
 }) {
@@ -586,6 +603,7 @@ function MonthGrid({
           const items = (byDay.get(dateKey(day)) ?? []).sort((a, b) => a.startTime.localeCompare(b.startTime));
           const active = items.filter((a) => a.status !== "CANCELLED");
           const outside = !isSameMonth(day, anchor);
+          const off = periodFor(timeOff, dateKey(day));
           return (
             <div
               key={day.toISOString()}
@@ -593,6 +611,7 @@ function MonthGrid({
                 "min-h-24 border-b border-r p-1 [&:nth-child(7n)]:border-r-0",
                 outside && "bg-muted/30",
                 isToday(day) && "bg-primary/5",
+                off && "bg-[repeating-linear-gradient(135deg,transparent_0,transparent_8px,rgb(20_184_166/0.12)_8px,rgb(20_184_166/0.12)_16px)]",
               )}
             >
               <button
@@ -607,6 +626,11 @@ function MonthGrid({
               >
                 {format(day, "d")}
               </button>
+              {off && (
+                <p className="mb-0.5 truncate px-1 text-[10px] font-medium text-teal-800 dark:text-teal-300" title={off.label ?? undefined}>
+                  {off.label || t("timeOff.default")}
+                </p>
+              )}
               {/* Phones: a count only; larger screens: the first sessions */}
               {active.length > 0 && (
                 <button

@@ -136,6 +136,7 @@ model Workspace {
   formTemplates  FormTemplate[]
   formRequests   FormRequest[]
   activities     Activity[]
+  timeOff        TimeOff[]
 }
 
 // ---------------------------------------------------------------------------
@@ -636,4 +637,23 @@ model Activity {
 
   @@index([workspaceId, createdAt])
   @@index([workspaceId, readAt])
+}
+
+// ---------------------------------------------------------------------------
+// Time off (vacation, training, closure)
+// ---------------------------------------------------------------------------
+
+// Whole days the practitioner is away: no therapy session can be booked on them
+// (by the practitioner or from the portal). Hourly work is still allowed.
+model TimeOff {
+  id          String   @id @default(cuid())
+  workspaceId String
+  startDate   DateTime @db.Date
+  endDate     DateTime @db.Date // inclusive
+  label       String? // e.g. "Vacances d'été"
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, endDate])
 }

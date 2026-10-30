@@ -8,6 +8,7 @@ import { requirePatientAuth, type PatientSession } from "@/lib/patient-auth";
 import { psychotherapyRate } from "@/lib/rates";
 import { sendPortalConfirmation, type PortalChange } from "@/lib/email";
 import { recordActivity } from "@/lib/inbox";
+import { timeOffOn } from "@/lib/time-off";
 import { formatMoney, formatWhen, langOf, localeOf } from "@/lib/format";
 
 const SESSION_DURATION_MIN = 60;
@@ -97,6 +98,7 @@ async function checkSlot(session: PatientSession, date: string, hour: number, ex
 
   const isoDay = startTime.getDay() === 0 ? 7 : startTime.getDay(); // 1=Mon … 7=Sun
   if (!workspace.workingDays.includes(isoDay)) return { error: "This day is not available" } as const;
+  if (await timeOffOn(workspaceId, startTime)) return { error: "This day is not available" } as const;
 
   const [startH] = workspace.workingHoursStart.split(":").map(Number);
   const [endH] = workspace.workingHoursEnd.split(":").map(Number);

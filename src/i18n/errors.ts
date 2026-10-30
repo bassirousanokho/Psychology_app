@@ -160,6 +160,13 @@ const EXACT: Record<string, string> = {
   "These details don't match": "Ces informations ne correspondent pas",
   "Enter your date of birth": "Saisissez votre date de naissance",
   "Your session has expired: check your details again": "Votre session a expiré : confirmez à nouveau votre identité",
+  // Time off
+  "You're away that day (time off): no therapy session can be booked":
+    "Vous êtes en congé ce jour-là : aucune séance de psychothérapie ne peut être réservée",
+  "Pick the first and last day": "Choisissez le premier et le dernier jour",
+  "The last day must be on or after the first": "Le dernier jour doit être après le premier",
+  "At most one year at a time": "Un an au maximum à la fois",
+  "Time off not found": "Congé introuvable",
   // Portal
   "This day is not available": "Ce jour n'est pas disponible",
   "This time slot is outside working hours": "Ce créneau est en dehors des heures d'ouverture",

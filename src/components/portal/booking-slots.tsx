@@ -17,6 +17,8 @@ interface BookingSlotsProps {
   busyByDate: Record<string, [number, number][]>;
   /** Moving this session instead of booking a new one */
   rescheduleId?: string;
+  /** Practice closed (time off), YYYY-MM-DD inclusive */
+  offDays?: { start: string; end: string }[];
 }
 
 function isoDay(d: Date): number {
@@ -33,6 +35,7 @@ export function BookingSlots({
   workingHoursEnd,
   busyByDate,
   rescheduleId,
+  offDays = [],
 }: BookingSlotsProps) {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedHour, setSelectedHour] = useState<number | null>(null);
@@ -50,7 +53,8 @@ export function BookingSlots({
   cursor.setHours(0, 0, 0, 0);
   // Scan at most ~3 months ahead so a workspace without working days can't hang the page
   for (let scanned = 0; availableDates.length < 14 && scanned < 90; scanned++) {
-    if (workingDays.includes(isoDay(cursor))) {
+    const key = toDateKey(cursor);
+    if (workingDays.includes(isoDay(cursor)) && !offDays.some((o) => key >= o.start && key <= o.end)) {
       availableDates.push(new Date(cursor));
     }
     cursor.setDate(cursor.getDate() + 1);
